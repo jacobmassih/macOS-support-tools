@@ -10,33 +10,139 @@ import IOKit
 import IOKit.hid
 import Combine
 import CoreGraphics
+import AppKit
 
 class MouseManager: ObservableObject {
-    @Published var isExternalMouseConnected = false
-    @Published var naturalScrollEnabled = true
+    @Published var connectedDevices: [MouseDevice] = []
+    @Published var deviceSettings: [String: MouseDevice] = [:]
+    @Published var isAnyExternalMouseConnected = false
     @Published var aggressiveInversion = false
     @Published var tapStatus = "Inactive"
+    @Published var mouseButtonsEnabled = true
+    @Published var naturalScrollEnabled = true
+    
     
     private var hidManager: IOHIDManager?
     private var eventTap: CFMachPort?
+    private var buttonEventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var connectedMouseDevices: Set<IOHIDDevice> = []
-    private var lastMouseEventTime: CFTimeInterval = 0
+    private var buttonRunLoopSource: CFRunLoopSource?
+    private let userDefaults = UserDefaults.standard
+    private let deviceSettingsKey = "MouseDeviceSettings"
+    private var deviceMonitorTimer: Timer?
+    private var lastEventTime: CFTimeInterval = 0
     
     init() {
         setupHIDManager()
         detectInitialDevices()
         setupScrollEventTap()
+        setupButtonEventTap()
         updateTapStatus()
+        loadDeviceSettings()
+        startDeviceMonitor()
     }
     
     deinit {
         disableScrollEventTap()
+        disableButtonEventTap()
+        stopDeviceMonitor()
     }
+    
+    // MARK: - Public Methods
     
     func toggleScrollDirection() {
         naturalScrollEnabled.toggle()
     }
+    
+    func toggleMouseButtons() {
+        mouseButtonsEnabled.toggle()
+    }
+    
+    func updateButtonSettings(for deviceId: String, buttonType: MouseButtonType, enabled: Bool) {
+        guard var device = deviceSettings[deviceId] else { return }
+        
+        switch buttonType {
+        case .left:
+            device.leftButtonEnabled = enabled
+        case .right:
+            device.rightButtonEnabled = enabled
+        case .middle:
+            device.middleButtonEnabled = enabled
+        case .button4:
+            device.button4Enabled = enabled
+        case .button5:
+            device.button5Enabled = enabled
+        }
+        
+        deviceSettings[deviceId] = device
+        saveDeviceSettings()
+    }
+    
+    func updateButtonAction(for deviceId: String, buttonType: MouseButtonType, action: MouseButtonAction) {
+        guard var device = deviceSettings[deviceId] else { return }
+        
+        switch buttonType {
+        case .button4:
+            device.button4Action = action
+        case .button5:
+            device.button5Action = action
+        default:
+            break // Only side buttons support action configuration
+        }
+        
+        deviceSettings[deviceId] = device
+        saveDeviceSettings()
+    }
+    
+    // MARK: - Internal Methods (accessible by callbacks)
+    
+    internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
+        let _ = ioDevice.deviceID // Suppress warning, deviceID is used for debugging purposes
+        let vendorID = ioDevice.vendorID
+        let productID = ioDevice.productID
+        let deviceName = ioDevice.productString ?? "Unknown Device"
+        
+        let id = "\(vendorID)-\(productID)"
+        
+        return MouseDevice(
+            id: id,
+            name: deviceName,
+            vendorID: vendorID,
+            productID: productID,
+            naturalScrollEnabled: true,
+            lastConnected: Date(),
+            leftButtonEnabled: true,
+            rightButtonEnabled: true,
+            middleButtonEnabled: true,
+            button4Enabled: true,
+            button5Enabled: true,
+            button4Action: .forward,
+            button5Action: .back
+        )
+    }
+    
+    internal func addDevice(_ device: MouseDevice) {
+        connectedDevices.append(device)
+        deviceSettings[device.id] = device
+        saveDeviceSettings()
+    }
+    
+    internal func removeDevice(_ device: MouseDevice) {
+        connectedDevices.removeAll { $0.id == device.id }
+        deviceSettings.removeValue(forKey: device.id)
+        saveDeviceSettings()
+    }
+    
+    internal func getCurrentActiveDevice() -> MouseDevice? {
+        // For now, just return the first connected device as the active device
+        return connectedDevices.first
+    }
+    
+    internal func shouldReverseScroll() -> Bool {
+        return isAnyExternalMouseConnected && !naturalScrollEnabled
+    }
+    
+    // MARK: - Private Methods
     
     private func updateTapStatus() {
         if eventTap != nil {
@@ -72,7 +178,26 @@ class MouseManager: ObservableObject {
         let deviceSet = IOHIDManagerCopyDevices(hidManager)
         if let devices = deviceSet {
             // Check if any external mouse is connected
-            isExternalMouseConnected = CFSetGetCount(devices) > 0
+            isAnyExternalMouseConnected = CFSetGetCount(devices) > 0
+            
+            // Convert CFSet to Array safely
+            let deviceCount = CFSetGetCount(devices)
+            if deviceCount > 0 {
+                let values = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: deviceCount)
+                defer { values.deallocate() }
+                CFSetGetValues(devices, values)
+                
+                let deviceArray = (0..<deviceCount).compactMap { index -> IOHIDDevice? in
+                    guard let devicePointer = values[index] else { return nil }
+                    // The device pointer is already an IOHIDDevice, no need to dereference with .pointee
+                    return Unmanaged<IOHIDDevice>.fromOpaque(devicePointer).takeUnretainedValue()
+                }
+                
+                // Update connected devices list
+                connectedDevices = deviceArray.compactMap { device in
+                    return createMouseDevice(from: device)
+                }
+            }
         }
     }
     
@@ -114,71 +239,126 @@ class MouseManager: ObservableObject {
         }
     }
     
-    fileprivate func shouldReverseScroll() -> Bool {
-        return isExternalMouseConnected && !naturalScrollEnabled
-    }
-}
-
-private func deviceAddedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
-    let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
-    DispatchQueue.main.async {
-        manager.isExternalMouseConnected = true
-    }
-}
-
-private func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
-    let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
-    DispatchQueue.main.async {
-        manager.isExternalMouseConnected = false
-    }
-}
-
-private func scrollEventCallback(
-    proxy: CGEventTapProxy,
-    type: CGEventType,
-    event: CGEvent,
-    refcon: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
-    }
-    
-    let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
-    // Only apply scroll reversal if we have external mouse connected and conditions are met
-    if manager.shouldReverseScroll() {
-        // Get the scroll deltas
-        let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
-        let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
+    private func setupButtonEventTap() {
+        let eventMask = (1 << CGEventType.otherMouseDown.rawValue) | (1 << CGEventType.otherMouseUp.rawValue)
+        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         
-        // Check for momentum scrolling phases - trackpad specific
-        let scrollPhase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
-        let momentumPhase = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
+        buttonEventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: buttonEventCallback,
+            userInfo: context
+        )
         
-        // If this has momentum phases, it's from trackpad - skip it completely
-        if scrollPhase != 0 || momentumPhase != 0 {
-            return Unmanaged.passRetained(event)
+        guard let buttonEventTap = buttonEventTap else {
+            print("Failed to create button event tap. App may need accessibility permissions.")
+            return
         }
         
-        // Check if this looks like discrete wheel scrolling (mouse)
-        // Mouse wheels typically generate integer or near-integer values
-        let isDiscreteScrolling = (abs(deltaY - round(deltaY)) < 0.01) || (abs(deltaX - round(deltaX)) < 0.01)
+        buttonRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, buttonEventTap, 0)
+        guard let buttonRunLoopSource = buttonRunLoopSource else { return }
         
-        // Only apply reversal to discrete scrolling events (mouse wheels)
-        if isDiscreteScrolling && (abs(deltaY) >= 1.0 || abs(deltaX) >= 1.0) {
-            // This appears to be a mouse wheel event - apply reversal
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: deltaY * -1)
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: deltaX * -1)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: buttonEventTap, enable: true)
+    }
+    
+    private func disableButtonEventTap() {
+        if let buttonEventTap = buttonEventTap {
+            CGEvent.tapEnable(tap: buttonEventTap, enable: false)
+            CFMachPortInvalidate(buttonEventTap)
+            self.buttonEventTap = nil
+        }
+        
+        if let buttonRunLoopSource = buttonRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
+            self.buttonRunLoopSource = nil
+        }
+    }
+    
+    private func startDeviceMonitor() {
+        deviceMonitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.checkDeviceConnectionStatus()
+        }
+    }
+    
+    private func stopDeviceMonitor() {
+        deviceMonitorTimer?.invalidate()
+        deviceMonitorTimer = nil
+    }
+    
+    private func checkDeviceConnectionStatus() {
+        guard let hidManager = hidManager else { return }
+        
+        let deviceSet = IOHIDManagerCopyDevices(hidManager)
+        if let devices = deviceSet {
+            // Convert CFSet to Array safely and get device IDs
+            let deviceCount = CFSetGetCount(devices)
+            var currentDeviceIDs: [String] = []
             
-            // Also reverse point deltas if they exist
-            let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-            let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-            if pointDeltaY != 0 || pointDeltaX != 0 {
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltaY * -1)
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltaX * -1)
+            if deviceCount > 0 {
+                let values = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: deviceCount)
+                defer { values.deallocate() }
+                CFSetGetValues(devices, values)
+                
+                currentDeviceIDs = (0..<deviceCount).compactMap { index -> String? in
+                    guard let devicePointer = values[index] else { return nil }
+                    // Use the same safe pattern as detectInitialDevices
+                    let device = Unmanaged<IOHIDDevice>.fromOpaque(devicePointer).takeUnretainedValue()
+                    return device.deviceID
+                }
+            }
+            
+            // Update connection status for each device
+            for device in connectedDevices {
+                if !currentDeviceIDs.contains(device.id) {
+                    // Device is disconnected
+                    removeDevice(device)
+                }
+            }
+            
+            // Check if any external mouse is connected
+            isAnyExternalMouseConnected = deviceCount > 0
+        }
+    }
+    
+    private func updateCurrentActiveDevice(naturalScroll: Bool) {
+        guard let activeDevice = getCurrentActiveDevice() else { return }
+        
+        // Update the natural scroll setting for the active device
+        var updatedDevice = activeDevice
+        updatedDevice.naturalScrollEnabled = naturalScroll
+        
+        // Save the updated device settings
+        deviceSettings[activeDevice.id] = updatedDevice
+        saveDeviceSettings()
+    }
+    
+    // MARK: - Device Settings Persistence
+    
+    private func loadDeviceSettings() {
+        guard let data = userDefaults.data(forKey: deviceSettingsKey),
+              let savedSettings = try? JSONDecoder().decode([String: MouseDevice].self, from: data) else {
+            return
+        }
+        
+        deviceSettings = savedSettings
+        
+        // Update connected devices with saved settings
+        for (index, device) in connectedDevices.enumerated() {
+            if let savedDevice = deviceSettings[device.id] {
+                connectedDevices[index] = savedDevice
             }
         }
     }
     
-    return Unmanaged.passRetained(event)
+    private func saveDeviceSettings() {
+        guard let data = try? JSONEncoder().encode(deviceSettings) else {
+            print("Failed to encode device settings")
+            return
+        }
+        
+        userDefaults.set(data, forKey: deviceSettingsKey)
+    }
 }
