@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var mouseManager: MouseManager
+    @State private var statusBarManager = StatusBarManager()
     
     var body: some View {
         VStack(spacing: 20) {
@@ -17,10 +18,10 @@ struct ContentView: View {
             
             HStack {
                 Circle()
-                    .fill(mouseManager.isExternalMouseConnected ? .green : .red)
+                    .fill(mouseManager.isAnyExternalMouseConnected ? .green : .red)
                     .frame(width: 10, height: 10)
                 
-                Text(mouseManager.isExternalMouseConnected ? "External mouse connected" : "No external mouse")
+                Text(mouseManager.isAnyExternalMouseConnected ? "External mouse connected" : "No external mouse")
             }
             
             Text("Natural scroll: \(mouseManager.naturalScrollEnabled ? "ON" : "OFF")")
@@ -30,6 +31,13 @@ struct ContentView: View {
             }
         }
         .padding()
+        .onAppear {
+            statusBarManager.setupStatusBar()
+            statusBarManager.mouseManager = mouseManager
+        }
+        .onChange(of: mouseManager.isAnyExternalMouseConnected) { _ in
+            statusBarManager.updateStatus()
+        }
     }
 }
 
