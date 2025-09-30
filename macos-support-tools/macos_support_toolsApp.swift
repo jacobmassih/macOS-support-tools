@@ -16,5 +16,10 @@ struct macos_support_toolsApp: App {
             ContentView()
                 .environmentObject(mouseManager)
         }
+        MenuBarExtra("My App", systemImage: "computermouse") {
+            StatusBarManager()
+                .environmentObject(mouseManager)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
