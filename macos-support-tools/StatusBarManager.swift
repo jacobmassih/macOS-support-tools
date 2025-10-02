@@ -14,11 +14,19 @@ struct StatusBarManager: View {
         VStack {
             Toggle(isOn: $mouseManager.naturalScrollEnabled) {
                 Text("Natural Scroll")
-                        .padding(.trailing, 50)
             }
             .toggleStyle(.switch)
             
+            Divider().padding(.vertical, 5)
+            
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Label("Quit", systemImage: "power")
+                }
+            }
         }
-        .padding(.all, 10)
     }
 }
