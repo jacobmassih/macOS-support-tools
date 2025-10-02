@@ -11,14 +11,18 @@ struct StatusBarManager: View {
     @EnvironmentObject var mouseManager: MouseManager
 
     var body: some View {
-        VStack {
-            Toggle(isOn: $mouseManager.naturalScrollEnabled) {
-                Text("Natural Scroll")
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: $mouseManager.naturalScrollEnabled) {
+                    Label("Natural Scroll", systemImage: "arrow.up.arrow.down")
+                        .padding(.trailing, 20) // small gap before switch
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small) 
             }
-            .toggleStyle(.switch)
-            
-            Divider().padding(.vertical, 5)
-            
+
+            Divider().padding(.vertical, 4)
+
             HStack {
                 Spacer()
                 Button(role: .destructive) {
@@ -26,7 +30,18 @@ struct StatusBarManager: View {
                 } label: {
                     Label("Quit", systemImage: "power")
                 }
+                .keyboardShortcut("q")
             }
         }
+        .padding(12)
+        .frame(width: 260)     // comfortable panel width
+        .scaleEffect(0.96)     // optional subtle compacting
+    }
+}
+
+struct StatusBarManager_Previews: PreviewProvider {
+    static var previews: some View {
+        StatusBarManager()
+            .environmentObject(MouseManager())
     }
 }
