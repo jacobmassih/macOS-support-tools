@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var mouseManager: MouseManager
-    @State private var statusBarManager = StatusBarManager()
     
     var body: some View {
         VStack(spacing: 20) {
@@ -31,13 +30,6 @@ struct ContentView: View {
             }
         }
         .padding()
-        .onAppear {
-            statusBarManager.setupStatusBar()
-            statusBarManager.mouseManager = mouseManager
-        }
-        .onChange(of: mouseManager.isAnyExternalMouseConnected) { _ in
-            statusBarManager.updateStatus()
-        }
     }
 }
 
