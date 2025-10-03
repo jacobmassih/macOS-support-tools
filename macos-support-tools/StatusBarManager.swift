@@ -9,32 +9,31 @@ import SwiftUI
 
 struct StatusBarManager: View {
     @EnvironmentObject var mouseManager: MouseManager
-
+    @StateObject private var launchAtLogin = LaunchAtLogin()
+    
     var body: some View {
-        VStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle(isOn: $mouseManager.naturalScrollEnabled) {
-                    Label("Natural Scroll", systemImage: "arrow.up.arrow.down")
-                        .padding(.trailing, 20) // small gap before switch
-                }
-                .toggleStyle(.switch)
-                .controlSize(.small) 
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
+        
+            Toggle("Launch at Login", isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            ))
+            
+            Divider().padding(.vertical, 2)
+            
+            Text("Settings")
+            
+            
+            Divider().padding(.vertical, 2)
+            
+            Button("Quit", role: .destructive) {
+                NSApplication.shared.terminate(nil)
             }
-
-            Divider().padding(.vertical, 4)
-
-            HStack {
-                Spacer()
-                Button(role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Label("Quit", systemImage: "power")
-                }
-                .keyboardShortcut("q")
-            }
+            .buttonStyle(.plain)
         }
         .padding(12)
-        .frame(width: 260)     // comfortable panel width
+        .frame(width: 200)     // comfortable panel width
         .scaleEffect(0.96)     // optional subtle compacting
     }
 }
