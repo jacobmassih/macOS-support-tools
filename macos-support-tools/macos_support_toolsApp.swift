@@ -20,6 +20,5 @@ struct macos_support_toolsApp: App {
             StatusBarManager()
                 .environmentObject(mouseManager)
         }
-        .menuBarExtraStyle(.window)
     }
 }
