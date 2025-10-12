@@ -12,13 +12,13 @@ struct macos_support_toolsApp: App {
     @StateObject private var mouseManager = MouseManager()
     
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(mouseManager)
-        }
         MenuBarExtra("My App", systemImage: "computermouse") {
             StatusBarManager()
                 .environmentObject(mouseManager)
+        }
+        
+        Window("", id: "main") {
+            ContentView().environmentObject(mouseManager)
         }
     }
 }
