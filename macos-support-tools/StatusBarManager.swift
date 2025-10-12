@@ -23,11 +23,11 @@ struct StatusBarManager: View {
             ))
             
             Divider().padding(.vertical, 2)
+
             Button("Settings") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "main")
             }
-            
             
             Divider().padding(.vertical, 2)
             

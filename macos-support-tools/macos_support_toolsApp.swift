@@ -16,7 +16,6 @@ struct macos_support_toolsApp: App {
             StatusBarManager()
                 .environmentObject(mouseManager)
         }
-        
         Window("", id: "main") {
             ContentView().environmentObject(mouseManager)
         }
