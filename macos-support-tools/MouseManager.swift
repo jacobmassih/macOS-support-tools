@@ -19,8 +19,12 @@ class MouseManager: ObservableObject {
     @Published var aggressiveInversion = false
     @Published var tapStatus = "Inactive"
     @Published var mouseButtonsEnabled = true
-    @Published var naturalScrollEnabled = true
-    
+    @Published var naturalScrollEnabled = true {
+        didSet {
+            UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
+        }
+    }
+
     
     private var hidManager: IOHIDManager?
     private var eventTap: CFMachPort?
@@ -40,6 +44,8 @@ class MouseManager: ObservableObject {
         updateTapStatus()
         loadDeviceSettings()
         startDeviceMonitor()
+        
+        naturalScrollEnabled = UserDefaults.standard.bool(forKey: "NaturalScrollEnabled")
     }
     
     deinit {
