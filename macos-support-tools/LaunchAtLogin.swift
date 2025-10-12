@@ -29,7 +29,9 @@ final class LaunchAtLogin: ObservableObject {
             } else {
                 try SMAppService.mainApp.unregister()
             }
-        } catch {}
+        } catch {
+            print("Failed to set launch at login status:", error)
+        }
         
         refresh()
     }
