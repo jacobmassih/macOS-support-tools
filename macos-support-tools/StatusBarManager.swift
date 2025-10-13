@@ -10,6 +10,8 @@ import SwiftUI
 struct StatusBarManager: View {
     @EnvironmentObject var mouseManager: MouseManager
     @StateObject private var launchAtLogin = LaunchAtLogin()
+    @Environment(\.openWindow) private var openWindow
+
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,9 +23,11 @@ struct StatusBarManager: View {
             ))
             
             Divider().padding(.vertical, 2)
-            
-            Text("Settings")
-            
+
+            Button("Settings") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "main")
+            }
             
             Divider().padding(.vertical, 2)
             
