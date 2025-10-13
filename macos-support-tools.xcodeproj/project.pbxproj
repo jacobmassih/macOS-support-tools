@@ -45,6 +45,11 @@
 			path = "macos-support-toolsUITests";
 			sourceTree = "<group>";
 		};
+		91C3F72C2E9B3BBC00B99623 /* .github */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = .github;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +80,7 @@
 		9191960F2E876DA50023719C = {
 			isa = PBXGroup;
 			children = (
+				91C3F72C2E9B3BBC00B99623 /* .github */,
 				9191961A2E876DA50023719C /* macos-support-tools */,
 				919196282E876DA50023719C /* macos-support-toolsTests */,
 				919196322E876DA50023719C /* macos-support-toolsUITests */,
@@ -109,6 +115,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				9191961A2E876DA50023719C /* macos-support-tools */,
+				91C3F72C2E9B3BBC00B99623 /* .github */,
 			);
 			name = "macos-support-tools";
 			packageProductDependencies = (
