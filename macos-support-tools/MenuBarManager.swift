@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct StatusBarManager: View {
+struct MenuBarManager: View {
     @EnvironmentObject var mouseManager: MouseManager
     @StateObject private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
@@ -16,17 +16,18 @@ struct StatusBarManager: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
-        
+            Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
+            
+            Divider().padding(.vertical, 2)
+            
             Toggle("Launch at Login", isOn: Binding(
                 get: { launchAtLogin.isEnabled },
                 set: { launchAtLogin.setEnabled($0) }
             ))
             
-            Divider().padding(.vertical, 2)
-
             Button("Settings") {
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "main")
+                // NSApp.activate(ignoringOtherApps: true)
+                // openWindow(id: "main")
             }
             
             Divider().padding(.vertical, 2)
@@ -44,7 +45,7 @@ struct StatusBarManager: View {
 
 struct StatusBarManager_Previews: PreviewProvider {
     static var previews: some View {
-        StatusBarManager()
+        MenuBarManager()
             .environmentObject(MouseManager())
     }
 }

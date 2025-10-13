@@ -91,11 +91,16 @@ func buttonEventCallback(
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-    guard let refcon = refcon else {
+        guard let refcon = refcon else {
         return Unmanaged.passRetained(event)
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    
+    if manager.mouseButtonsEnabled == false {
+        return Unmanaged.passRetained(event)
+}
+    
     
     // Check if the event is from a side button (Button 4 or Button 5)
     let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
@@ -107,7 +112,7 @@ func buttonEventCallback(
             let action = device.button4Action
             return handleButtonAction(event: event, action: action)
         }
-    case 5:
+    case 3:
         // Button 5 (Back) - check if we should override the action
         if let device = manager.getCurrentActiveDevice(), device.button5Enabled {
             let action = device.button5Action
@@ -131,13 +136,11 @@ private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Un
     
     switch action {
     case .back:
-        // Use Command+Left Arrow for back navigation (works in browsers, Finder, etc.)
-        simulateKeyboardShortcut(keyCode: 0x7B, modifiers: .maskCommand) // Left arrow + Command
+        simulateKeyboardShortcut(keyCode: 0x21, modifiers: .maskCommand) // Command + [
         return nil // Consume the event
         
     case .forward:
-        // Use Command+Right Arrow for forward navigation
-        simulateKeyboardShortcut(keyCode: 0x7C, modifiers: .maskCommand) // Right arrow + Command
+        simulateKeyboardShortcut(keyCode: 0x1E, modifiers: .maskCommand) // Command + ]
         return nil // Consume the event
         
     case .middleClick:
@@ -179,3 +182,4 @@ private func simulateKeyboardShortcut(keyCode: CGKeyCode, modifiers: CGEventFlag
         keyUpEvent.post(tap: .cghidEventTap)
     }
 }
+
