@@ -13,7 +13,7 @@ struct macos_support_toolsApp: App {
     
     var body: some Scene {
         MenuBarExtra("My App", systemImage: "computermouse") {
-            StatusBarManager()
+            MenuBarManager()
                 .environmentObject(mouseManager)
         }
         Window("", id: "main") {

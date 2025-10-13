@@ -18,7 +18,11 @@ class MouseManager: ObservableObject {
     @Published var isAnyExternalMouseConnected = false
     @Published var aggressiveInversion = false
     @Published var tapStatus = "Inactive"
-    @Published var mouseButtonsEnabled = true
+    @Published var mouseButtonsEnabled = true {
+        didSet {
+            UserDefaults.standard.set(mouseButtonsEnabled, forKey: "MouseButtonsEnabled")
+        }
+    }
     @Published var naturalScrollEnabled = true {
         didSet {
             UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
@@ -47,6 +51,7 @@ class MouseManager: ObservableObject {
         startDeviceMonitor()
         
         naturalScrollEnabled = UserDefaults.standard.bool(forKey: "NaturalScrollEnabled")
+        mouseButtonsEnabled = UserDefaults.standard.bool(forKey: "MouseButtonsEnabled")
     }
     
     deinit {
@@ -369,4 +374,3 @@ class MouseManager: ObservableObject {
         userDefaults.set(data, forKey: deviceSettingsKey)
     }
 }
-

@@ -1,3 +1,5 @@
+//
+//  MouseEventHandlers.swift
 //  macos-support-tools
 //
 //  Created by Jacob Massih on 2025-09-28.
@@ -94,6 +96,11 @@ func buttonEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    
+    if manager.mouseButtonsEnabled == false {
+        return Unmanaged.passRetained(event)
+}
+    
     
     // Check if the event is from a side button (Button 4 or Button 5)
     let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
