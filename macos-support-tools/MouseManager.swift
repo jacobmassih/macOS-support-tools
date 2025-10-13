@@ -37,6 +37,7 @@ class MouseManager: ObservableObject {
     private var lastEventTime: CFTimeInterval = 0
     
     init() {
+                                                print("[MouseManager] Initialized and starting up.")
         setupHIDManager()
         detectInitialDevices()
         setupScrollEventTap()
@@ -368,3 +369,4 @@ class MouseManager: ObservableObject {
         userDefaults.set(data, forKey: deviceSettingsKey)
     }
 }
+
