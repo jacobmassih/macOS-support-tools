@@ -18,7 +18,11 @@ class MouseManager: ObservableObject {
     @Published var isAnyExternalMouseConnected = false
     @Published var aggressiveInversion = false
     @Published var tapStatus = "Inactive"
-    @Published var mouseButtonsEnabled = true
+    @Published var mouseButtonsEnabled = true {
+        didSet {
+            UserDefaults.standard.set(mouseButtonsEnabled, forKey: "MouseButtonsEnabled")
+        }
+    }
     @Published var naturalScrollEnabled = true {
         didSet {
             UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
@@ -37,6 +41,7 @@ class MouseManager: ObservableObject {
     private var lastEventTime: CFTimeInterval = 0
     
     init() {
+                                                print("[MouseManager] Initialized and starting up.")
         setupHIDManager()
         detectInitialDevices()
         setupScrollEventTap()
@@ -46,6 +51,7 @@ class MouseManager: ObservableObject {
         startDeviceMonitor()
         
         naturalScrollEnabled = UserDefaults.standard.bool(forKey: "NaturalScrollEnabled")
+        mouseButtonsEnabled = UserDefaults.standard.bool(forKey: "MouseButtonsEnabled")
     }
     
     deinit {
