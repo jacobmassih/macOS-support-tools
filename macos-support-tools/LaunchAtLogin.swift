@@ -6,10 +6,11 @@
 //
 import Foundation
 import ServiceManagement
-import Combine
+import Observation
 
-final class LaunchAtLogin: ObservableObject {
-    @Published private(set) var isEnabled: Bool = false
+@Observable
+final class LaunchAtLogin {
+    private(set) var isEnabled: Bool = false
     
     init() { refresh() }
     

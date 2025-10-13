@@ -8,12 +8,13 @@
 import SwiftUI
 
 struct MenuBarManager: View {
-    @EnvironmentObject var mouseManager: MouseManager
-    @StateObject private var launchAtLogin = LaunchAtLogin()
+    @Environment(MouseManager.self) var mouseManager: MouseManager
+    @State private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
 
     
     var body: some View {
+        @Bindable var mouseManager = mouseManager
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
@@ -46,6 +47,6 @@ struct MenuBarManager: View {
 struct StatusBarManager_Previews: PreviewProvider {
     static var previews: some View {
         MenuBarManager()
-            .environmentObject(MouseManager())
+            .environment(MouseManager())
     }
 }
