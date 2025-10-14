@@ -1,0 +1,145 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    name: Build and Create Release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Check macOS version
+        run: |
+          sw_vers
+          echo "Building on macOS version: $(sw_vers -productVersion)"
+      
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      
+      - name: Verify Xcode version
+        run: |
+          xcodebuild -version
+          xcrun --show-sdk-version
+      
+      - name: Build for Release
+        run: |
+          xcodebuild clean build \
+            -project macos-support-tools.xcodeproj \
+            -scheme macos-support-tools \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath ./build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+      
+      - name: Run Tests
+        run: |
+          xcodebuild test \
+            -project macos-support-tools.xcodeproj \
+            -scheme macos-support-tools \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+        continue-on-error: true
+      
+      - name: Find and prepare app bundle
+        id: prepare-app
+        run: |
+          APP_PATH=$(find ./build/Build/Products/Release -name "*.app" -type d -maxdepth 1 | head -1)
+          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Could not find .app bundle"
+            exit 1
+          fi
+          
+          echo "Found app at: $APP_PATH"
+          
+          # Create artifacts directory
+          mkdir -p ./artifacts
+          
+          # Create ZIP archive
+          cd "$(dirname "$APP_PATH")"
+          APP_NAME=$(basename "$APP_PATH")
+          zip -r "../../../artifacts/macos-support-tools-${{ steps.version.outputs.version }}.zip" "$APP_NAME"
+          cd -
+          
+          echo "Created ZIP archive"
+          ls -lh ./artifacts/
+      
+      - name: Generate Release Notes
+        id: release-notes
+        run: |
+          CHANGELOG_CONTENT=$(cat CHANGELOG.md | sed -n '/## \['"${{ steps.version.outputs.version }}"'\]/,/## \[/p' | sed '$ d')
+          
+          if [ -z "$CHANGELOG_CONTENT" ]; then
+            CHANGELOG_CONTENT="Release version ${{ steps.version.outputs.version }}"
+          fi
+          
+          echo "# macOS Support Tools v${{ steps.version.outputs.version }}" > release-notes.md
+          echo "" >> release-notes.md
+          echo "$CHANGELOG_CONTENT" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Installation" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "1. Download \`macos-support-tools-${{ steps.version.outputs.version }}.zip\`" >> release-notes.md
+          echo "2. Extract the archive" >> release-notes.md
+          echo "3. Move \`macos-support-tools.app\` to your Applications folder" >> release-notes.md
+          echo "4. Launch the app and grant Accessibility permissions when prompted" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Requirements" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "- macOS 13.0 or later" >> release-notes.md
+          echo "- Accessibility permissions required for full functionality" >> release-notes.md
+          
+          cat release-notes.md
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: macOS Support Tools ${{ steps.version.outputs.tag }}
+          body_path: release-notes.md
+          files: |
+            ./artifacts/macos-support-tools-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-support-tools-${{ steps.version.outputs.version }}
+          path: ./artifacts/
+          retention-days: 30

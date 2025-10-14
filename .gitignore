@@ -1,1 +1,12 @@
 macos-support-tools.xcodeproj/*
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+DerivedData/
+build/
+*.app
+*.zip
+*.pkg
+*.dmg
+.DS_Store
+artifacts/
