@@ -6,7 +6,7 @@ A native macOS menu bar application for managing external mouse settings and beh
 [![License](https://img.shields.io/github/license/jacobmassih/macOS-support-tools)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13.0+-blue)](https://www.apple.com/macos/)
 
-📖 **[Quick Start Guide](QUICKSTART.md)** | 📋 **[Changelog](CHANGELOG.md)** | 🤝 **[Contributing](CONTRIBUTING.md)**
+📖 **[Quick Start](QUICKSTART.md)** | 📋 **[Changelog](CHANGELOG.md)** | 🤝 **[Contributing](CONTRIBUTING.md)** | ❓ **[FAQ](FAQ.md)** | 🏗️ **[Architecture](ARCHITECTURE.md)**
 
 ## Features
 
@@ -141,7 +141,15 @@ This project is created by Jacob Massih.
 
 ## Support
 
-For issues, questions, or feature requests, please [open an issue](https://github.com/jacobmassih/macOS-support-tools/issues) on GitHub.
+Need help? We've got you covered:
+
+- 📖 **[Quick Start Guide](QUICKSTART.md)** - Get up and running in minutes
+- ❓ **[FAQ](FAQ.md)** - Answers to common questions
+- 🐛 **[Report a Bug](https://github.com/jacobmassih/macOS-support-tools/issues/new?template=bug_report.md)** - Found an issue? Let us know
+- 💡 **[Request a Feature](https://github.com/jacobmassih/macOS-support-tools/issues/new?template=feature_request.md)** - Have an idea? Share it
+- 💬 **[Discussions](https://github.com/jacobmassih/macOS-support-tools/discussions)** - Ask questions and share ideas
+
+For general issues or questions, please [open an issue](https://github.com/jacobmassih/macOS-support-tools/issues) on GitHub.
 
 ---
 
