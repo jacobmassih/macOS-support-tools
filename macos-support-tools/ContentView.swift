@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var mouseManager: MouseManager
+    @Environment(MouseManager.self) var mouseManager: MouseManager
     
     var body: some View {
         VStack(spacing: 20) {

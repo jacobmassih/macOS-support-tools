@@ -9,15 +9,15 @@ import SwiftUI
 
 @main
 struct macos_support_toolsApp: App {
-    @StateObject private var mouseManager = MouseManager()
+    @State private var mouseManager = MouseManager()
     
     var body: some Scene {
         MenuBarExtra("My App", systemImage: "computermouse") {
             MenuBarManager()
-                .environmentObject(mouseManager)
+                .environment(mouseManager)
         }
         Window("", id: "main") {
-            ContentView().environmentObject(mouseManager)
+            ContentView().environment(mouseManager)
         }
     }
 }
