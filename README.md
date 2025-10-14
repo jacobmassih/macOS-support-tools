@@ -2,6 +2,12 @@
 
 A native macOS menu bar application for managing external mouse settings and behavior.
 
+[![Release](https://img.shields.io/github/v/release/jacobmassih/macOS-support-tools)](https://github.com/jacobmassih/macOS-support-tools/releases/latest)
+[![License](https://img.shields.io/github/license/jacobmassih/macOS-support-tools)](LICENSE)
+[![macOS](https://img.shields.io/badge/macOS-13.0+-blue)](https://www.apple.com/macos/)
+
+📖 **[Quick Start Guide](QUICKSTART.md)** | 📋 **[Changelog](CHANGELOG.md)** | 🤝 **[Contributing](CONTRIBUTING.md)**
+
 ## Features
 
 ### 🖱️ Mouse Management
