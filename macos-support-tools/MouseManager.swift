@@ -8,22 +8,21 @@
 import Foundation
 import IOKit
 import IOKit.hid
-import Combine
 import CoreGraphics
 import AppKit
 
-class MouseManager: ObservableObject {
-    @Published var connectedDevices: [MouseDevice] = []
-    @Published var deviceSettings: [String: MouseDevice] = [:]
-    @Published var isAnyExternalMouseConnected = false
-    @Published var aggressiveInversion = false
-    @Published var tapStatus = "Inactive"
-    @Published var mouseButtonsEnabled = true {
+@Observable class MouseManager {
+    var connectedDevices: [MouseDevice] = []
+    var deviceSettings: [String: MouseDevice] = [:]
+    var isAnyExternalMouseConnected = false
+    var aggressiveInversion = false
+    var tapStatus = "Inactive"
+    var mouseButtonsEnabled = true {
         didSet {
             UserDefaults.standard.set(mouseButtonsEnabled, forKey: "MouseButtonsEnabled")
         }
     }
-    @Published var naturalScrollEnabled = true {
+    var naturalScrollEnabled = true {
         didSet {
             UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
         }
@@ -374,3 +373,4 @@ class MouseManager: ObservableObject {
         userDefaults.set(data, forKey: deviceSettingsKey)
     }
 }
+
