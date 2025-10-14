@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/jacobmassih/macOS-support-tools/discussions
+    about: Ask questions and discuss with the community
+  - name: Documentation
+    url: https://github.com/jacobmassih/macOS-support-tools/blob/main/README.md
+    about: Read the documentation for help
