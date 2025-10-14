@@ -1,12 +1,31 @@
-macos-support-tools.xcodeproj/*
+# Xcode user-specific files
 *.xcuserstate
 *.xcuserdatad
 xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Build directories
 DerivedData/
 build/
 *.app
+*.dSYM
+
+# Archives
 *.zip
 *.pkg
 *.dmg
+*.ipa
+
+# macOS
 .DS_Store
+
+# Artifacts
 artifacts/
+
+# SPM
+.swiftpm/
+.build/
+
+# CocoaPods
+Pods/
+*.xcworkspace/xcshareddata/
