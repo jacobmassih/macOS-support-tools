@@ -27,7 +27,8 @@ import AppKit
             UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
         }
     }
-
+    
+    let citrixMonitor = CitrixMonitor()
     
     private var hidManager: IOHIDManager?
     private var eventTap: CFMachPort?
@@ -373,4 +374,3 @@ import AppKit
         userDefaults.set(data, forKey: deviceSettingsKey)
     }
 }
-
