@@ -8,6 +8,7 @@
 import Foundation
 import CoreGraphics
 import IOKit.hid
+import AppKit
 
 // MARK: - HID Manager Callbacks
 
@@ -31,6 +32,27 @@ func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, 
             manager.removeDevice(removedDevice)
         }
     }
+}
+
+private func isCitrixWorkspaceActive() -> Bool {
+    guard let activeApp = NSWorkspace.shared.frontmostApplication else {
+        return false
+    }
+    
+    let citrixBundleIds = [
+        "com.citrix.receiver.icaviewer.mac",
+        "com.citrix.XenAppViewer",
+        "com.citrix.receiver.nomas"
+    ]
+    
+    if let bundleId = activeApp.bundleIdentifier {
+        return citrixBundleIds.contains(bundleId)
+    }
+    
+    // Fallback: check by app name
+    let appName = activeApp.localizedName ?? ""
+    return appName.lowercased().contains("citrix workspace") ||
+           appName.lowercased().contains("citrix receiver")
 }
 
 // MARK: - Event Tap Callbacks
@@ -99,7 +121,11 @@ func buttonEventCallback(
     
     if manager.mouseButtonsEnabled == false {
         return Unmanaged.passRetained(event)
-}
+    }
+    
+    if isCitrixWorkspaceActive() {
+        return Unmanaged.passRetained(event)
+    }
     
     
     // Check if the event is from a side button (Button 4 or Button 5)
