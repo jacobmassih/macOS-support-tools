@@ -8,7 +8,6 @@
 import Foundation
 import CoreGraphics
 import IOKit.hid
-import AppKit
 
 // MARK: - HID Manager Callbacks
 
