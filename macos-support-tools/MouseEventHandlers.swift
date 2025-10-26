@@ -102,8 +102,8 @@ func buttonEventCallback(
         return Unmanaged.passRetained(event)
     }
     
-    // Use cached Citrix state instead of querying every time
-    if manager.isCitrixActive {
+    // Use cached Citrix state from CitrixMonitor
+    if manager.citrixMonitor.isCitrixActive {
         return Unmanaged.passRetained(event)
     }
     
@@ -188,4 +188,3 @@ private func simulateKeyboardShortcut(keyCode: CGKeyCode, modifiers: CGEventFlag
         keyUpEvent.post(tap: .cghidEventTap)
     }
 }
-

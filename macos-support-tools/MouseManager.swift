@@ -28,8 +28,8 @@ import AppKit
         }
     }
     
-    // Citrix monitoring - cached state
-    private(set) var isCitrixActive: Bool = false
+    // Citrix monitoring
+    let citrixMonitor = CitrixMonitor()
     
     private var hidManager: IOHIDManager?
     private var eventTap: CFMachPort?
@@ -50,7 +50,6 @@ import AppKit
         updateTapStatus()
         loadDeviceSettings()
         startDeviceMonitor()
-        startCitrixMonitoring()
         
         naturalScrollEnabled = UserDefaults.standard.bool(forKey: "NaturalScrollEnabled")
         mouseButtonsEnabled = UserDefaults.standard.bool(forKey: "MouseButtonsEnabled")
@@ -374,47 +373,5 @@ import AppKit
         }
         
         userDefaults.set(data, forKey: deviceSettingsKey)
-    }
-    
-    // MARK: - Citrix Monitoring
-    
-    func startCitrixMonitoring() {
-        // Initial check
-        updateCitrixState()
-        
-        // Monitor app switches
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            self?.updateCitrixState()
-        }
-    }
-    
-    private func updateCitrixState() {
-        isCitrixActive = checkIfCitrixIsActive()
-    }
-    
-    private func checkIfCitrixIsActive() -> Bool {
-        guard let activeApp = NSWorkspace.shared.frontmostApplication else {
-            return false
-        }
-        
-        let citrixBundleIds = [
-            "com.citrix.receiver.icaviewer.mac",
-            "com.citrix.receiver.icaviewer",
-            "com.citrix.XenAppViewer",
-            "com.citrix.receiver.nomas"
-        ]
-        
-        if let bundleId = activeApp.bundleIdentifier {
-            return citrixBundleIds.contains(bundleId)
-        }
-        
-        // Fallback: check by app name
-        let appName = activeApp.localizedName ?? ""
-        return appName.lowercased().contains("citrix workspace") ||
-               appName.lowercased().contains("citrix receiver")
     }
 }
