@@ -102,7 +102,6 @@ func buttonEventCallback(
         return Unmanaged.passRetained(event)
     }
     
-    // Use cached Citrix state from CitrixMonitor
     if manager.citrixMonitor.isCitrixActive {
         return Unmanaged.passRetained(event)
     }

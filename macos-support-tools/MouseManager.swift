@@ -28,7 +28,6 @@ import AppKit
         }
     }
     
-    // Citrix monitoring
     let citrixMonitor = CitrixMonitor()
     
     private var hidManager: IOHIDManager?
