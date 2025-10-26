@@ -34,24 +34,11 @@ import AppKit
     }
     
     private func checkIfCitrixIsActive() -> Bool {
-        guard let activeApp = NSWorkspace.shared.frontmostApplication else {
+        guard let activeApp = NSWorkspace.shared.frontmostApplication,
+              let bundleId = activeApp.bundleIdentifier else {
             return false
         }
         
-        let citrixBundleIds = [
-            "com.citrix.receiver.icaviewer.mac",
-            "com.citrix.receiver.icaviewer",
-            "com.citrix.XenAppViewer",
-            "com.citrix.receiver.nomas"
-        ]
-        
-        if let bundleId = activeApp.bundleIdentifier {
-            return citrixBundleIds.contains(bundleId)
-        }
-        
-        // Fallback: check by app name
-        let appName = activeApp.localizedName ?? ""
-        return appName.lowercased().contains("citrix workspace") ||
-               appName.lowercased().contains("citrix receiver")
+        return bundleId == "com.citrix.receiver.icaviewer.mac"
     }
 }
