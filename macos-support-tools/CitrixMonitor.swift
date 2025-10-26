@@ -10,9 +10,14 @@ import AppKit
 
 @Observable class CitrixMonitor {
     private(set) var isCitrixActive: Bool = false
+    private var observer: NSObjectProtocol?
     
     init() {
         startMonitoring()
+    }
+    
+    deinit {
+        stopMonitoring()
     }
     
     func startMonitoring() {
@@ -20,12 +25,19 @@ import AppKit
         updateCitrixState()
         
         // Monitor app switches
-        NSWorkspace.shared.notificationCenter.addObserver(
+        observer = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] notification in
             self?.updateCitrixState()
+        }
+    }
+    
+    func stopMonitoring() {
+        if let observer = observer {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            self.observer = nil
         }
     }
     
