@@ -1,1 +1,9 @@
-macos-support-tools.xcodeproj/*
+# Xcode user settings
+xcuserdata/
+
+# Build artifacts
+build/
+DerivedData/
+
+# macOS
+.DS_Store
