@@ -9,8 +9,15 @@ import Foundation
 import AppKit
 
 @Observable class CitrixMonitor {
-    private(set) var isCitrixActive: Bool = false
+    private var _isCitrixActive: Bool = false
+    private let lock = NSLock()
     private var observer: NSObjectProtocol?
+    
+    var isCitrixActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _isCitrixActive
+    }
     
     init() {
         startMonitoring()
@@ -42,7 +49,10 @@ import AppKit
     }
     
     private func updateCitrixState() {
-        isCitrixActive = checkIfCitrixIsActive()
+        let newState = checkIfCitrixIsActive()
+        lock.lock()
+        _isCitrixActive = newState
+        lock.unlock()
     }
     
     private func checkIfCitrixIsActive() -> Bool {
