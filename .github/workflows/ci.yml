@@ -12,8 +12,7 @@ jobs:
     name: Build and Test on macOS 26
     runs-on: macos-latest  # Should support macOS 26
     permissions:
-        contents: write
-        issues: write
+      contents: read
     
     steps:
       - name: Checkout code
@@ -62,7 +61,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || true
+            | xcpretty
       
       - name: Run unit tests
         run: |
@@ -73,7 +72,8 @@ jobs:
             -only-testing:macos-support-toolsTests \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            | xcpretty || true
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
       
       - name: Run UI tests
         run: |
@@ -84,7 +84,8 @@ jobs:
             -only-testing:macos-support-toolsUITests \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            | xcpretty || true
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
       
       - name: Generate test report
         if: always()
