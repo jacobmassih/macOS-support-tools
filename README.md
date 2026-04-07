@@ -51,6 +51,30 @@ Full builds require the full Xcode app. Command Line Tools alone are not enough 
 - CI is configured to build without code signing.
 - The app is not sandboxed because its input-event behavior depends on macOS APIs that require broader access.
 
+## Local Signing For Xcode
+
+If you want to run the app locally from Xcode with a stable signing identity, create `Config/LocalSigning.xcconfig` on your machine.
+
+The easiest option is:
+
+```bash
+./scripts/setup-local-signing.sh YOUR_TEAM_ID
+```
+
+You can find your Apple Developer Team ID in Xcode under:
+
+- `Xcode > Settings > Accounts`
+- select your Apple ID
+- select your team
+
+If you prefer to do it manually, create `Config/LocalSigning.xcconfig` with:
+
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+```
+
+This file is ignored by git and is included automatically by the shared project configuration.
+
 ## License
 
 This project is released under the MIT License. See [`LICENSE`](LICENSE).

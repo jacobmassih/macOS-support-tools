@@ -24,6 +24,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9170A0012FC0000000000001 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		9170A0022FC0000000000001 /* LocalSigning.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = LocalSigning.example.xcconfig; sourceTree = "<group>"; };
 		919196182E876DA50023719C /* macos-support-tools.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "macos-support-tools.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		919196252E876DA50023719C /* macos-support-toolsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "macos-support-toolsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9191962F2E876DA50023719C /* macos-support-toolsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "macos-support-toolsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -90,10 +92,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9170A0032FC0000000000001 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				9170A0012FC0000000000001 /* Shared.xcconfig */,
+				9170A0022FC0000000000001 /* LocalSigning.example.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
 		9191960F2E876DA50023719C = {
 			isa = PBXGroup;
 			children = (
 				91C3F72C2E9B3BBC00B99623 /* .github */,
+				9170A0032FC0000000000001 /* Config */,
 				9191961A2E876DA50023719C /* macos-support-tools */,
 				919196282E876DA50023719C /* macos-support-toolsTests */,
 				919196322E876DA50023719C /* macos-support-toolsUITests */,
@@ -291,6 +303,7 @@
 /* Begin XCBuildConfiguration section */
 		919196372E876DA50023719C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -325,7 +338,6 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -357,6 +369,7 @@
 		};
 		919196382E876DA50023719C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -391,7 +404,6 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -415,6 +427,7 @@
 		};
 		9191963A2E876DA50023719C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -422,7 +435,6 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -448,6 +460,7 @@
 		};
 		9191963B2E876DA50023719C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -455,7 +468,6 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -482,12 +494,12 @@
 		};
 		9191963D2E876DA50023719C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
@@ -504,12 +516,12 @@
 		};
 		9191963E2E876DA50023719C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
@@ -526,11 +538,11 @@
 		};
 		919196402E876DA50023719C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mst.macos-support-toolsUITests";
@@ -546,11 +558,11 @@
 		};
 		919196412E876DA50023719C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9170A0012FC0000000000001 /* Shared.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mst.macos-support-toolsUITests";
