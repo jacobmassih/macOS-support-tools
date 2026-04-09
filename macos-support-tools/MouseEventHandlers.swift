@@ -186,3 +186,25 @@ private func simulateKeyboardShortcut(keyCode: CGKeyCode, modifiers: CGEventFlag
         keyUpEvent.post(tap: .cghidEventTap)
     }
 }
+
+// MARK: - Keyboard Event Tap Callback
+
+func keyboardEventCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    refcon: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let refcon = refcon else {
+        return Unmanaged.passRetained(event)
+    }
+    
+    let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    
+    if manager.keyboardBlocked {
+        // Block the keyboard event by returning nil
+        return nil
+    }
+    
+    return Unmanaged.passRetained(event)
+}

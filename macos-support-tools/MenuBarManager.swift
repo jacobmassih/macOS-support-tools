@@ -18,6 +18,7 @@ struct MenuBarManager: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
+            Toggle("Block Keyboard", isOn: $mouseManager.keyboardBlocked)
             
             Divider().padding(.vertical, 2)
             
