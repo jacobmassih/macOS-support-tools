@@ -12,19 +12,31 @@ import CoreGraphics
 import AppKit
 
 @Observable class MouseManager {
+    private enum DefaultsKey {
+        static let mouseButtonsEnabled = "MouseButtonsEnabled"
+        static let naturalScrollEnabled = "NaturalScrollEnabled"
+        static let citrixPassthroughEnabled = "CitrixPassthroughEnabled"
+    }
+    
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
     var isAnyExternalMouseConnected = false
+    var accessibilityTrusted = false
     var aggressiveInversion = false
     var tapStatus = "Inactive"
     var mouseButtonsEnabled = true {
         didSet {
-            UserDefaults.standard.set(mouseButtonsEnabled, forKey: "MouseButtonsEnabled")
+            UserDefaults.standard.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
         }
     }
     var naturalScrollEnabled = true {
         didSet {
-            UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
+            UserDefaults.standard.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
+        }
+    }
+    var citrixPassthroughEnabled = true {
+        didSet {
+            UserDefaults.standard.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
     }
     var keyboardBlocked = false {
@@ -52,7 +64,14 @@ import AppKit
     private var lastEventTime: CFTimeInterval = 0
     
     init() {
-                                                print("[MouseManager] Initialized and starting up.")
+        userDefaults.register(defaults: [
+            DefaultsKey.mouseButtonsEnabled: true,
+            DefaultsKey.naturalScrollEnabled: true,
+            DefaultsKey.citrixPassthroughEnabled: true
+        ])
+        
+        print("[MouseManager] Initialized and starting up.")
+        refreshAccessibilityTrust(prompt: true)
         setupHIDManager()
         detectInitialDevices()
         setupScrollEventTap()
@@ -61,8 +80,9 @@ import AppKit
         loadDeviceSettings()
         startDeviceMonitor()
         
-        naturalScrollEnabled = UserDefaults.standard.bool(forKey: "NaturalScrollEnabled")
-        mouseButtonsEnabled = UserDefaults.standard.bool(forKey: "MouseButtonsEnabled")
+        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
+        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
+        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
     }
     
     deinit {
@@ -82,6 +102,23 @@ import AppKit
         mouseButtonsEnabled.toggle()
     }
     
+    func refreshAccessibilityTrust(prompt: Bool = false) {
+        let options = [
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt
+        ] as CFDictionary
+        
+        accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
+        updateTapStatus()
+        
+        if accessibilityTrusted {
+            setupScrollEventTap()
+            setupButtonEventTap()
+            if keyboardBlocked {
+                setupKeyboardEventTap()
+            }
+        }
+    }
+    
     func updateButtonSettings(for deviceId: String, buttonType: MouseButtonType, enabled: Bool) {
         guard var device = deviceSettings[deviceId] else { return }
         
@@ -99,6 +136,7 @@ import AppKit
         }
         
         deviceSettings[deviceId] = device
+        updateConnectedDevice(device)
         saveDeviceSettings()
     }
     
@@ -115,18 +153,17 @@ import AppKit
         }
         
         deviceSettings[deviceId] = device
+        updateConnectedDevice(device)
         saveDeviceSettings()
     }
     
     // MARK: - Internal Methods (accessible by callbacks)
     
     internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
-        let _ = ioDevice.deviceID // Suppress warning, deviceID is used for debugging purposes
         let vendorID = ioDevice.vendorID
         let productID = ioDevice.productID
         let deviceName = ioDevice.productString ?? "Unknown Device"
-        
-        let id = "\(vendorID)-\(productID)"
+        let id = ioDevice.deviceID
         
         return MouseDevice(
             id: id,
@@ -146,6 +183,10 @@ import AppKit
     }
     
     internal func addDevice(_ device: MouseDevice) {
+        guard !connectedDevices.contains(where: { $0.id == device.id }) else {
+            return
+        }
+        
         connectedDevices.append(device)
         deviceSettings[device.id] = device
         saveDeviceSettings()
@@ -169,10 +210,12 @@ import AppKit
     // MARK: - Private Methods
     
     private func updateTapStatus() {
-        if eventTap != nil {
+        if !accessibilityTrusted {
+            tapStatus = "Inactive - Accessibility permission required"
+        } else if eventTap != nil && buttonEventTap != nil {
             tapStatus = "Active"
         } else {
-            tapStatus = "Inactive - Accessibility permission required"
+            tapStatus = "Inactive - Event tap unavailable"
         }
     }
     
@@ -218,14 +261,23 @@ import AppKit
                 }
                 
                 // Update connected devices list
-                connectedDevices = deviceArray.compactMap { device in
+                let detectedDevices = deviceArray.compactMap { device in
                     return createMouseDevice(from: device)
                 }
+                
+                connectedDevices = uniqueDevices(detectedDevices)
             }
         }
     }
     
     private func setupScrollEventTap() {
+        guard accessibilityTrusted else {
+            updateTapStatus()
+            return
+        }
+        
+        guard eventTap == nil else { return }
+        
         let eventMask = (1 << CGEventType.scrollWheel.rawValue)
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         
@@ -248,6 +300,7 @@ import AppKit
         
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
+        updateTapStatus()
     }
     
     private func disableScrollEventTap() {
@@ -264,6 +317,13 @@ import AppKit
     }
     
     private func setupButtonEventTap() {
+        guard accessibilityTrusted else {
+            updateTapStatus()
+            return
+        }
+        
+        guard buttonEventTap == nil else { return }
+        
         let eventMask = (1 << CGEventType.otherMouseDown.rawValue) | (1 << CGEventType.otherMouseUp.rawValue)
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         
@@ -286,6 +346,7 @@ import AppKit
         
         CFRunLoopAddSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
         CGEvent.tapEnable(tap: buttonEventTap, enable: true)
+        updateTapStatus()
     }
     
     private func disableButtonEventTap() {
@@ -302,6 +363,11 @@ import AppKit
     }
     
     private func setupKeyboardEventTap() {
+        guard accessibilityTrusted else {
+            updateTapStatus()
+            return
+        }
+        
         guard keyboardEventTap == nil else { return }
         
         let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
@@ -396,7 +462,21 @@ import AppKit
         
         // Save the updated device settings
         deviceSettings[activeDevice.id] = updatedDevice
+        updateConnectedDevice(updatedDevice)
         saveDeviceSettings()
+    }
+    
+    private func updateConnectedDevice(_ device: MouseDevice) {
+        guard let index = connectedDevices.firstIndex(where: { $0.id == device.id }) else { return }
+        connectedDevices[index] = device
+    }
+    
+    private func uniqueDevices(_ devices: [MouseDevice]) -> [MouseDevice] {
+        var seenIDs = Set<String>()
+        
+        return devices.filter { device in
+            seenIDs.insert(device.id).inserted
+        }
     }
     
     // MARK: - Device Settings Persistence

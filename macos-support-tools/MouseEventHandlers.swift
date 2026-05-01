@@ -101,7 +101,7 @@ func buttonEventCallback(
         return Unmanaged.passRetained(event)
     }
     
-    if manager.citrixMonitor.isCitrixActive {
+    if manager.citrixPassthroughEnabled && manager.citrixMonitor.isCitrixActive {
         return Unmanaged.passRetained(event)
     }
     

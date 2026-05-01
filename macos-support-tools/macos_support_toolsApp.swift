@@ -12,12 +12,13 @@ struct macos_support_toolsApp: App {
     @State private var mouseManager = MouseManager()
     
     var body: some Scene {
-        MenuBarExtra("My App", systemImage: "computermouse") {
+        MenuBarExtra("Support Tools", systemImage: "computermouse") {
             MenuBarManager()
                 .environment(mouseManager)
         }
-        Window("", id: "main") {
+        Window("Settings", id: "main") {
             ContentView().environment(mouseManager)
         }
+        .windowResizability(.contentSize)
     }
 }
