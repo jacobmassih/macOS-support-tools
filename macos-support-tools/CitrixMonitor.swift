@@ -9,8 +9,16 @@ import Foundation
 import AppKit
 
 @Observable class CitrixMonitor {
-    private(set) var isCitrixActive: Bool = false
+    @ObservationIgnored private let stateLock = NSLock()
+    @ObservationIgnored private var _isCitrixActive: Bool = false
+    @ObservationIgnored var onStateChange: ((Bool) -> Void)?
     private var observer: NSObjectProtocol?
+
+    var isCitrixActive: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _isCitrixActive
+    }
     
     init() {
         startMonitoring()
@@ -21,6 +29,8 @@ import AppKit
     }
     
     func startMonitoring() {
+        guard observer == nil else { return }
+
         // Initial check
         updateCitrixState()
         
@@ -42,7 +52,15 @@ import AppKit
     }
     
     private func updateCitrixState() {
-        isCitrixActive = checkIfCitrixIsActive()
+        setCitrixActive(checkIfCitrixIsActive())
+    }
+
+    private func setCitrixActive(_ isActive: Bool) {
+        stateLock.lock()
+        _isCitrixActive = isActive
+        stateLock.unlock()
+
+        onStateChange?(isActive)
     }
     
     private func checkIfCitrixIsActive() -> Bool {
@@ -51,6 +69,7 @@ import AppKit
             return false
         }
         
+        // Citrix Viewer is the remote session process launched by Citrix Workspace.
         return bundleId == "com.citrix.receiver.icaviewer.mac"
     }
 }

@@ -46,9 +46,10 @@ func scrollEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    let snapshot = manager.currentEventTapSnapshot()
     
     // Only apply scroll reversal if we have external mouse connected and conditions are met
-    if manager.shouldReverseScroll() {
+    if snapshot.shouldReverseScroll {
         // Get the scroll deltas
         let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
         let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
@@ -91,17 +92,18 @@ func buttonEventCallback(
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-        guard let refcon = refcon else {
+    guard let refcon = refcon else {
         return Unmanaged.passRetained(event)
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    let snapshot = manager.currentEventTapSnapshot()
     
-    if manager.mouseButtonsEnabled == false {
+    if snapshot.mouseButtonsEnabled == false {
         return Unmanaged.passRetained(event)
     }
     
-    if manager.citrixPassthroughEnabled && manager.citrixMonitor.isCitrixActive {
+    if snapshot.citrixPassthroughEnabled && snapshot.isCitrixActive {
         return Unmanaged.passRetained(event)
     }
     
@@ -112,15 +114,13 @@ func buttonEventCallback(
     switch buttonNumber {
     case 4:
         // Button 4 (Forward) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button4Enabled {
-            let action = device.button4Action
-            return handleButtonAction(event: event, action: action)
+        if snapshot.button4Enabled {
+            return handleButtonAction(event: event, action: snapshot.button4Action)
         }
     case 3:
         // Button 5 (Back) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button5Enabled {
-            let action = device.button5Action
-            return handleButtonAction(event: event, action: action)
+        if snapshot.button5Enabled {
+            return handleButtonAction(event: event, action: snapshot.button5Action)
         }
     default:
         break
@@ -200,8 +200,9 @@ func keyboardEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+    let snapshot = manager.currentEventTapSnapshot()
     
-    if manager.keyboardBlocked {
+    if snapshot.keyboardBlocked {
         // Block the keyboard event by returning nil
         return nil
     }

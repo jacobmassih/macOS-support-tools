@@ -17,26 +17,49 @@ import AppKit
         static let naturalScrollEnabled = "NaturalScrollEnabled"
         static let citrixPassthroughEnabled = "CitrixPassthroughEnabled"
     }
-    
-    var connectedDevices: [MouseDevice] = []
+
+    struct EventTapSnapshot {
+        var shouldReverseScroll = false
+        var mouseButtonsEnabled = true
+        var citrixPassthroughEnabled = true
+        var isCitrixActive = false
+        var keyboardBlocked = false
+        var button4Enabled = false
+        var button4Action: MouseButtonAction = .none
+        var button5Enabled = false
+        var button5Action: MouseButtonAction = .none
+    }
+
+    var connectedDevices: [MouseDevice] = [] {
+        didSet {
+            refreshEventTapSnapshot()
+        }
+    }
     var deviceSettings: [String: MouseDevice] = [:]
-    var isAnyExternalMouseConnected = false
+    var isAnyExternalMouseConnected = false {
+        didSet {
+            refreshEventTapSnapshot()
+        }
+    }
     var accessibilityTrusted = false
     var aggressiveInversion = false
     var tapStatus = "Inactive"
     var mouseButtonsEnabled = true {
         didSet {
             UserDefaults.standard.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
+            refreshEventTapSnapshot()
         }
     }
     var naturalScrollEnabled = true {
         didSet {
             UserDefaults.standard.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
+            refreshEventTapSnapshot()
         }
     }
     var citrixPassthroughEnabled = true {
         didSet {
             UserDefaults.standard.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
+            refreshEventTapSnapshot()
         }
     }
     var keyboardBlocked = false {
@@ -46,6 +69,7 @@ import AppKit
             } else {
                 disableKeyboardEventTap()
             }
+            refreshEventTapSnapshot()
         }
     }
     
@@ -62,6 +86,8 @@ import AppKit
     private let deviceSettingsKey = "MouseDeviceSettings"
     private var deviceMonitorTimer: Timer?
     private var lastEventTime: CFTimeInterval = 0
+    @ObservationIgnored private let eventTapSnapshotLock = NSLock()
+    @ObservationIgnored private var eventTapSnapshot = EventTapSnapshot()
     
     init() {
         userDefaults.register(defaults: [
@@ -69,20 +95,24 @@ import AppKit
             DefaultsKey.naturalScrollEnabled: true,
             DefaultsKey.citrixPassthroughEnabled: true
         ])
-        
-        print("[MouseManager] Initialized and starting up.")
-        refreshAccessibilityTrust(prompt: true)
-        setupHIDManager()
-        detectInitialDevices()
-        setupScrollEventTap()
-        setupButtonEventTap()
-        updateTapStatus()
-        loadDeviceSettings()
-        startDeviceMonitor()
-        
+
         naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
         mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
         citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
+        citrixMonitor.onStateChange = { [weak self] _ in
+            self?.refreshEventTapSnapshot()
+        }
+        
+        print("[MouseManager] Initialized and starting up.")
+        setupHIDManager()
+        detectInitialDevices()
+        loadDeviceSettings()
+        refreshEventTapSnapshot()
+        refreshAccessibilityTrust(prompt: true)
+        setupScrollEventTap()
+        setupButtonEventTap()
+        updateTapStatus()
+        startDeviceMonitor()
     }
     
     deinit {
@@ -206,8 +236,33 @@ import AppKit
     internal func shouldReverseScroll() -> Bool {
         return isAnyExternalMouseConnected && !naturalScrollEnabled
     }
+
+    internal func currentEventTapSnapshot() -> EventTapSnapshot {
+        eventTapSnapshotLock.lock()
+        defer { eventTapSnapshotLock.unlock() }
+        return eventTapSnapshot
+    }
     
     // MARK: - Private Methods
+
+    private func refreshEventTapSnapshot() {
+        let activeDevice = connectedDevices.first
+        let snapshot = EventTapSnapshot(
+            shouldReverseScroll: isAnyExternalMouseConnected && !naturalScrollEnabled,
+            mouseButtonsEnabled: mouseButtonsEnabled,
+            citrixPassthroughEnabled: citrixPassthroughEnabled,
+            isCitrixActive: citrixMonitor.isCitrixActive,
+            keyboardBlocked: keyboardBlocked,
+            button4Enabled: activeDevice?.button4Enabled ?? false,
+            button4Action: activeDevice?.button4Action ?? .none,
+            button5Enabled: activeDevice?.button5Enabled ?? false,
+            button5Action: activeDevice?.button5Action ?? .none
+        )
+
+        eventTapSnapshotLock.lock()
+        defer { eventTapSnapshotLock.unlock() }
+        eventTapSnapshot = snapshot
+    }
     
     private func updateTapStatus() {
         if !accessibilityTrusted {
@@ -469,6 +524,7 @@ import AppKit
     private func updateConnectedDevice(_ device: MouseDevice) {
         guard let index = connectedDevices.firstIndex(where: { $0.id == device.id }) else { return }
         connectedDevices[index] = device
+        refreshEventTapSnapshot()
     }
     
     private func uniqueDevices(_ devices: [MouseDevice]) -> [MouseDevice] {
