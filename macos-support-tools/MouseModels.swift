@@ -9,7 +9,7 @@ import Foundation
 import IOKit.hid
 
 // Mouse button actions for side buttons
-enum MouseButtonAction: CaseIterable, Codable {
+enum MouseButtonAction: CaseIterable, Codable, Hashable {
     case none
     case back
     case forward
@@ -28,7 +28,7 @@ enum MouseButtonAction: CaseIterable, Codable {
 }
 
 // Mouse button types for configuration
-enum MouseButtonType: CaseIterable {
+enum MouseButtonType: CaseIterable, Hashable {
     case left
     case right
     case middle

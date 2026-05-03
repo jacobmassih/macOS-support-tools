@@ -11,14 +11,15 @@ struct MenuBarManager: View {
     @Environment(MouseManager.self) var mouseManager: MouseManager
     @State private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
-
     
     var body: some View {
         @Bindable var mouseManager = mouseManager
-        VStack(alignment: .leading, spacing: 10) {
+        
+        VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
             Toggle("Block Keyboard", isOn: $mouseManager.keyboardBlocked)
+            Toggle("Citrix Compatibility", isOn: $mouseManager.citrixPassthroughEnabled)
             
             Divider().padding(.vertical, 2)
             
@@ -28,8 +29,8 @@ struct MenuBarManager: View {
             ))
             
             Button("Settings") {
-                // NSApp.activate(ignoringOtherApps: true)
-                // openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "main")
             }
             
             Divider().padding(.vertical, 2)
@@ -40,8 +41,10 @@ struct MenuBarManager: View {
             .buttonStyle(.plain)
         }
         .padding(12)
-        .frame(width: 200)     // comfortable panel width
-        .scaleEffect(0.96)     // optional subtle compacting
+        .frame(width: 230)
+        .onAppear {
+            launchAtLogin.refresh()
+        }
     }
 }
 
