@@ -27,6 +27,15 @@ import AppKit
             UserDefaults.standard.set(naturalScrollEnabled, forKey: "NaturalScrollEnabled")
         }
     }
+    var keyboardBlocked = false {
+        didSet {
+            if keyboardBlocked {
+                setupKeyboardEventTap()
+            } else {
+                disableKeyboardEventTap()
+            }
+        }
+    }
     
     let citrixMonitor = CitrixMonitor()
     
@@ -35,6 +44,8 @@ import AppKit
     private var buttonEventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var buttonRunLoopSource: CFRunLoopSource?
+    private var keyboardEventTap: CFMachPort?
+    private var keyboardRunLoopSource: CFRunLoopSource?
     private let userDefaults = UserDefaults.standard
     private let deviceSettingsKey = "MouseDeviceSettings"
     private var deviceMonitorTimer: Timer?
@@ -57,6 +68,7 @@ import AppKit
     deinit {
         disableScrollEventTap()
         disableButtonEventTap()
+        disableKeyboardEventTap()
         stopDeviceMonitor()
     }
     
@@ -286,6 +298,46 @@ import AppKit
         if let buttonRunLoopSource = buttonRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
             self.buttonRunLoopSource = nil
+        }
+    }
+    
+    private func setupKeyboardEventTap() {
+        guard keyboardEventTap == nil else { return }
+        
+        let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        
+        keyboardEventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: keyboardEventCallback,
+            userInfo: context
+        )
+        
+        guard let keyboardEventTap = keyboardEventTap else {
+            print("Failed to create keyboard event tap. App may need accessibility permissions.")
+            return
+        }
+        
+        keyboardRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyboardEventTap, 0)
+        guard let keyboardRunLoopSource = keyboardRunLoopSource else { return }
+        
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
+    }
+    
+    private func disableKeyboardEventTap() {
+        if let keyboardEventTap = keyboardEventTap {
+            CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
+            CFMachPortInvalidate(keyboardEventTap)
+            self.keyboardEventTap = nil
+        }
+        
+        if let keyboardRunLoopSource = keyboardRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
+            self.keyboardRunLoopSource = nil
         }
     }
     
