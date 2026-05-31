@@ -14,8 +14,6 @@ import IOKit.hid
 func deviceAddedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
     let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
     DispatchQueue.main.async {
-        manager.isAnyExternalMouseConnected = true
-        
         if let newDevice = manager.createMouseDevice(from: device) {
             manager.addDevice(newDevice)
         }
@@ -25,8 +23,6 @@ func deviceAddedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, se
 func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
     let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
     DispatchQueue.main.async {
-        manager.isAnyExternalMouseConnected = false
-        
         if let removedDevice = manager.createMouseDevice(from: device) {
             manager.removeDevice(removedDevice)
         }

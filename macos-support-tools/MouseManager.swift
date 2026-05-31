@@ -160,6 +160,10 @@ import AppKit
     // MARK: - Internal Methods (accessible by callbacks)
     
     internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
+        guard !ioDevice.isBuiltInDevice else {
+            return nil
+        }
+
         let vendorID = ioDevice.vendorID
         let productID = ioDevice.productID
         let deviceName = ioDevice.productString ?? "Unknown Device"
@@ -189,12 +193,14 @@ import AppKit
         
         connectedDevices.append(device)
         deviceSettings[device.id] = device
+        isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
     
     internal func removeDevice(_ device: MouseDevice) {
         connectedDevices.removeAll { $0.id == device.id }
         deviceSettings.removeValue(forKey: device.id)
+        isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
     
@@ -244,9 +250,6 @@ import AppKit
         
         let deviceSet = IOHIDManagerCopyDevices(hidManager)
         if let devices = deviceSet {
-            // Check if any external mouse is connected
-            isAnyExternalMouseConnected = CFSetGetCount(devices) > 0
-            
             // Convert CFSet to Array safely
             let deviceCount = CFSetGetCount(devices)
             if deviceCount > 0 {
@@ -267,6 +270,8 @@ import AppKit
                 
                 connectedDevices = uniqueDevices(detectedDevices)
             }
+
+            isAnyExternalMouseConnected = !connectedDevices.isEmpty
         }
     }
     
@@ -449,7 +454,7 @@ import AppKit
             }
             
             // Check if any external mouse is connected
-            isAnyExternalMouseConnected = deviceCount > 0
+            isAnyExternalMouseConnected = !connectedDevices.isEmpty
         }
     }
     
