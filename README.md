@@ -75,6 +75,19 @@ DEVELOPMENT_TEAM = YOUR_TEAM_ID
 
 This file is ignored by git and is included automatically by the shared project configuration.
 
+## Releases
+
+GitHub releases are created automatically when a version tag is pushed:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow builds the app in Release configuration, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are the values a future Homebrew cask will use.
+
+Release builds are currently unsigned and not notarized. On first launch, macOS may require opening the app from Finder with **Control-click > Open** to approve running it.
+
 ## License
 
 This project is released under the MIT License. See [`LICENSE`](LICENSE).

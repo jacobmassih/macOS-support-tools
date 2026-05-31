@@ -140,7 +140,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				9191961A2E876DA50023719C /* macos-support-tools */,
-				91C3F72C2E9B3BBC00B99623 /* .github */,
 			);
 			name = "macos-support-tools";
 			packageProductDependencies = (
