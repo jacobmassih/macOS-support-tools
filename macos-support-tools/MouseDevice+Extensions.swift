@@ -34,6 +34,10 @@ extension IOHIDDevice {
     var productString: String? {
         IOHIDDeviceGetProperty(self, kIOHIDProductKey as CFString) as? String
     }
+
+    var isBuiltInDevice: Bool {
+        boolProperty("Built-In" as CFString) || boolProperty("MT Built-In" as CFString)
+    }
     
     private var serialNumber: String? {
         IOHIDDeviceGetProperty(self, kIOHIDSerialNumberKey as CFString) as? String
@@ -60,5 +64,17 @@ extension IOHIDDevice {
         }
         
         return value as? Int ?? 0
+    }
+
+    private func boolProperty(_ key: CFString) -> Bool {
+        guard let value = IOHIDDeviceGetProperty(self, key) else {
+            return false
+        }
+
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+
+        return value as? Bool ?? false
     }
 }
