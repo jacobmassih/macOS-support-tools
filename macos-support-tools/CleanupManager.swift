@@ -1,10 +1,3 @@
-//
-//  CleanupManager.swift
-//  macos-support-tools
-//
-//  Created by Codex on 2026-06-04.
-//
-
 import Foundation
 import Observation
 
@@ -14,14 +7,14 @@ final class CleanupManager {
     private(set) var scanResults: [CleanupScanResult] = []
     private(set) var lastScanDate: Date?
     private(set) var lastError: String?
-    
+
     var totalReclaimableBytes: Int64 {
         scanResults.reduce(0) { $0 + $1.totalBytes }
     }
-    
+
     var categories: [CleanupCategory] {
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-        
+
         return [
             CleanupCategory(
                 id: .userCaches,
@@ -76,40 +69,40 @@ final class CleanupManager {
             )
         ]
     }
-    
+
     @MainActor
     func scan() async {
         isScanning = true
         lastError = nil
-        
+
         let categoriesToScan = categories
-        
+
         do {
             let results = try await Task.detached(priority: .userInitiated) {
                 try categoriesToScan.map { category in
                     try Self.scan(category: category)
                 }
             }.value
-            
+
             scanResults = results
             lastScanDate = Date()
         } catch {
             lastError = error.localizedDescription
         }
-        
+
         isScanning = false
     }
-    
+
     nonisolated private static func scan(category: CleanupCategory) throws -> CleanupScanResult {
         let items = category.paths.flatMap { path -> [CleanupItem] in
             guard FileManager.default.fileExists(atPath: path.path) else {
                 return []
             }
-            
+
             return cleanupItems(in: path)
         }
         .sorted { $0.size > $1.size }
-        
+
         return CleanupScanResult(
             category: category,
             totalBytes: items.reduce(0) { $0 + $1.size },
@@ -117,7 +110,7 @@ final class CleanupManager {
             items: items
         )
     }
-    
+
     nonisolated private static func cleanupItems(in directoryURL: URL) -> [CleanupItem] {
         guard let childURLs = try? FileManager.default.contentsOfDirectory(
             at: directoryURL,
@@ -132,7 +125,7 @@ final class CleanupManager {
                 )
             ]
         }
-        
+
         return childURLs.map { url in
             CleanupItem(
                 url: url,
@@ -141,7 +134,7 @@ final class CleanupManager {
             )
         }
     }
-    
+
     nonisolated private static func folderSize(at url: URL) -> Int64 {
         let resourceKeys: Set<URLResourceKey> = [
             .isDirectoryKey,
@@ -149,38 +142,38 @@ final class CleanupManager {
             .totalFileAllocatedSizeKey,
             .fileAllocatedSizeKey
         ]
-        
+
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsHiddenFiles]
         ) else {
             return fileSize(at: url)
         }
-        
+
         var totalBytes: Int64 = fileSize(at: url)
-        
+
         for case let fileURL as URL in enumerator {
             guard let values = try? fileURL.resourceValues(forKeys: resourceKeys) else {
                 continue
             }
-            
+
             if values.isRegularFile == true {
                 totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
             }
         }
-        
+
         return totalBytes
     }
-    
+
     nonisolated private static func fileSize(at url: URL) -> Int64 {
         guard let values = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]) else {
             return 0
         }
-        
+
         return Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
     }
-    
+
     nonisolated private static func modifiedDate(for url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }

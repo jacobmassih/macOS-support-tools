@@ -14,9 +14,9 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case citrix = "Citrix"
     case devices = "Devices"
     case app = "App"
-    
+
     var id: Self { self }
-    
+
     var systemImage: String {
         switch self {
         case .overview: return "gauge.with.dots.needle.67percent"
@@ -33,7 +33,7 @@ struct ContentView: View {
     @Environment(MouseManager.self) private var mouseManager
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var selectedSection: SettingsSection? = .overview
-    
+
     var body: some View {
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selectedSection) { section in
@@ -75,13 +75,13 @@ struct ContentView: View {
 private struct OverviewSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
     let launchAtLogin: LaunchAtLogin
-    
+
     var body: some View {
         SettingsHeader(
             title: "Settings",
             subtitle: "Control mouse behavior, Citrix compatibility, connected devices, and app startup."
         )
-        
+
         SettingsCard(spacing: 0) {
             HStack(spacing: 0) {
                 StatusPill(
@@ -90,27 +90,27 @@ private struct OverviewSettingsView: View {
                     systemImage: "computermouse",
                     tint: mouseManager.isAnyExternalMouseConnected ? .green : .secondary
                 )
-                
+
                 VerticalDivider()
-                
+
                 StatusPill(
                     title: "Event Tap",
                     value: mouseManager.tapStatus,
                     systemImage: "dot.radiowaves.left.and.right",
                     tint: mouseManager.tapStatus == "Active" ? .green : .orange
                 )
-                
+
                 VerticalDivider()
-                
+
                 StatusPill(
                     title: "Citrix",
                     value: mouseManager.citrixMonitor.isCitrixActive ? "Active" : "Inactive",
                     systemImage: "rectangle.connected.to.line.below",
                     tint: mouseManager.citrixMonitor.isCitrixActive ? .blue : .secondary
                 )
-                
+
                 VerticalDivider()
-                
+
                 StatusPill(
                     title: "Launch at Login",
                     value: launchAtLogin.isEnabled ? "Enabled" : "Disabled",
@@ -119,7 +119,7 @@ private struct OverviewSettingsView: View {
                 )
             }
         }
-        
+
         SettingsCard {
             SettingToggleRow(
                 title: "Natural scroll",
@@ -127,18 +127,18 @@ private struct OverviewSettingsView: View {
                 systemImage: "arrow.up.and.down",
                 isOn: mouseBinding(\.naturalScrollEnabled)
             )
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Mouse buttons",
                 subtitle: "Apply configured actions to side mouse buttons.",
                 systemImage: "button.horizontal",
                 isOn: mouseBinding(\.mouseButtonsEnabled)
             )
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Citrix compatibility",
                 subtitle: "Let Citrix receive side-button events directly when Citrix Viewer is active.",
@@ -147,7 +147,7 @@ private struct OverviewSettingsView: View {
             )
         }
     }
-    
+
     private func mouseBinding(_ keyPath: ReferenceWritableKeyPath<MouseManager, Bool>) -> Binding<Bool> {
         Binding {
             mouseManager[keyPath: keyPath]
@@ -159,13 +159,13 @@ private struct OverviewSettingsView: View {
 
 private struct MouseSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
-    
+
     var body: some View {
         SettingsHeader(
             title: "Mouse",
             subtitle: "Tune global mouse behavior and temporary input controls."
         )
-        
+
         SettingsCard {
             SettingToggleRow(
                 title: "Natural scroll",
@@ -173,18 +173,18 @@ private struct MouseSettingsView: View {
                 systemImage: "arrow.up.and.down",
                 isOn: binding(\.naturalScrollEnabled)
             )
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Mouse button actions",
                 subtitle: "Enable custom side-button handling for back, forward, and middle-click actions.",
                 systemImage: "button.horizontal",
                 isOn: binding(\.mouseButtonsEnabled)
             )
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Block keyboard",
                 subtitle: "Temporarily suppress keyboard input while the app is running.",
@@ -192,23 +192,23 @@ private struct MouseSettingsView: View {
                 isOn: binding(\.keyboardBlocked)
             )
         }
-        
+
         SettingsCard {
             LabeledContent("Connected external mouse") {
                 Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
                     .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
             }
-            
+
             Divider()
-            
+
             LabeledContent("Tap status") {
                 Text(mouseManager.tapStatus)
                     .foregroundStyle(.secondary)
             }
-            
+
             if !mouseManager.accessibilityTrusted {
                 Divider()
-                
+
                 Button {
                     mouseManager.refreshAccessibilityTrust(prompt: true)
                 } label: {
@@ -217,7 +217,7 @@ private struct MouseSettingsView: View {
             }
         }
     }
-    
+
     private func binding(_ keyPath: ReferenceWritableKeyPath<MouseManager, Bool>) -> Binding<Bool> {
         Binding {
             mouseManager[keyPath: keyPath]
@@ -229,13 +229,13 @@ private struct MouseSettingsView: View {
 
 private struct CitrixSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
-    
+
     var body: some View {
         SettingsHeader(
             title: "Citrix",
             subtitle: "Control how mouse button handling behaves while Citrix Viewer is active."
         )
-        
+
         SettingsCard {
             SettingToggleRow(
                 title: "Citrix compatibility",
@@ -247,15 +247,15 @@ private struct CitrixSettingsView: View {
                     mouseManager.citrixPassthroughEnabled = $0
                 }
             )
-            
+
             Divider()
-            
+
             LabeledContent("Current Citrix state") {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(mouseManager.citrixMonitor.isCitrixActive ? .green : .secondary)
                         .frame(width: 8, height: 8)
-                    
+
                     Text(mouseManager.citrixMonitor.isCitrixActive ? "Active" : "Inactive")
                         .foregroundStyle(.secondary)
                 }
@@ -266,13 +266,13 @@ private struct CitrixSettingsView: View {
 
 private struct CleanupSettingsView: View {
     @Environment(CleanupManager.self) private var cleanupManager
-    
+
     var body: some View {
         SettingsHeader(
             title: "Cleanup",
             subtitle: "Scan safe cleanup areas and estimate how much space can be recovered. Phase 1 only scans and never deletes files."
         )
-        
+
         SettingsCard {
             HStack(alignment: .center, spacing: 18) {
                 Image(systemName: "internaldrive")
@@ -280,18 +280,18 @@ private struct CleanupSettingsView: View {
                     .foregroundStyle(.tint)
                     .frame(width: 48, height: 48)
                     .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ByteCountFormatter.cleanupString(fromByteCount: cleanupManager.totalReclaimableBytes))
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    
+
                     Text(cleanupManager.scanResults.isEmpty ? "Run a scan to estimate reclaimable space." : "Estimated reclaimable space across scanned categories.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer(minLength: 16)
-                
+
                 Button {
                     Task {
                         await cleanupManager.scan()
@@ -306,24 +306,24 @@ private struct CleanupSettingsView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(cleanupManager.isScanning)
             }
-            
+
             if let lastScanDate = cleanupManager.lastScanDate {
                 Divider()
-                
+
                 LabeledContent("Last scan") {
                     Text(lastScanDate.formatted(date: .abbreviated, time: .standard))
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             if let lastError = cleanupManager.lastError {
                 Divider()
-                
+
                 Label(lastError, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
             }
         }
-        
+
         if cleanupManager.scanResults.isEmpty {
             EmptyStateView(
                 title: cleanupManager.isScanning ? "Scanning cleanup areas" : "No scan results yet",
@@ -342,7 +342,7 @@ private struct CleanupSettingsView: View {
 
 private struct CleanupResultCard: View {
     let result: CleanupScanResult
-    
+
     var body: some View {
         SettingsCard(spacing: 14) {
             HStack(alignment: .center, spacing: 14) {
@@ -351,12 +351,12 @@ private struct CleanupResultCard: View {
                     .foregroundStyle(.tint)
                     .frame(width: 36, height: 36)
                     .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(result.category.title)
                             .font(.headline)
-                        
+
                         Text(result.category.riskLevel.rawValue)
                             .font(.caption.weight(.semibold))
                             .padding(.horizontal, 7)
@@ -364,30 +364,30 @@ private struct CleanupResultCard: View {
                             .foregroundStyle(result.category.riskLevel == .safe ? .green : .orange)
                             .background((result.category.riskLevel == .safe ? Color.green : Color.orange).opacity(0.12), in: Capsule())
                     }
-                    
+
                     Text(result.category.subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer(minLength: 16)
-                
+
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
                         .font(.title3.weight(.semibold))
-                    
+
                     Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Divider()
-            
+
             Text(result.category.riskLevel.description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            
+
             if result.items.isEmpty {
                 Label("No candidate files found.", systemImage: "checkmark.circle")
                     .font(.caption)
@@ -399,7 +399,7 @@ private struct CleanupResultCard: View {
                             ForEach(Array(result.items.prefix(100))) { item in
                                 CleanupCandidateRow(item: item)
                             }
-                            
+
                             if result.items.count > 100 {
                                 Text("\(result.items.count - 100) more candidate\(result.items.count - 100 == 1 ? "" : "s") not shown.")
                                     .font(.caption)
@@ -424,38 +424,38 @@ private struct CleanupResultCard: View {
 
 private struct CleanupCandidateRow: View {
     let item: CleanupItem
-    
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: itemSystemImage)
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.url.lastPathComponent.isEmpty ? item.url.path(percentEncoded: false) : item.url.lastPathComponent)
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
-                
+
                 Text(item.url.deletingLastPathComponent().path(percentEncoded: false))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            
+
             Spacer(minLength: 12)
-            
+
             VStack(alignment: .trailing, spacing: 3) {
                 Text(ByteCountFormatter.cleanupString(fromByteCount: item.size))
                     .font(.caption.weight(.semibold))
-                
+
                 if let modifiedDate = item.modifiedDate {
                     Text(modifiedDate.formatted(date: .abbreviated, time: .omitted))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([item.url])
             } label: {
@@ -466,26 +466,26 @@ private struct CleanupCandidateRow: View {
         }
         .padding(.vertical, 4)
     }
-    
+
     private var itemSystemImage: String {
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: item.url.path, isDirectory: &isDirectory), isDirectory.boolValue {
             return "folder"
         }
-        
+
         return "doc"
     }
 }
 
 private struct DeviceSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
-    
+
     var body: some View {
         SettingsHeader(
             title: "Devices",
             subtitle: "Review connected mice and configure per-device side button behavior."
         )
-        
+
         if mouseManager.connectedDevices.isEmpty {
             EmptyStateView(
                 title: "No mouse connected",
@@ -505,35 +505,35 @@ private struct DeviceSettingsView: View {
 private struct DeviceCard: View {
     @Environment(MouseManager.self) private var mouseManager
     let device: MouseDevice
-    
+
     var body: some View {
         SettingsCard(spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(device.name)
                         .font(.headline)
-                    
+
                     Text("\(String(format: "%04X", device.vendorID)):\(String(format: "%04X", device.productID))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 Text("Connected")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)
             }
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Button 4",
                 subtitle: "Enable handling for the forward side button.",
                 systemImage: "arrow.right.circle",
                 isOn: buttonEnabledBinding(.button4)
             )
-            
+
             Picker("Button 4 action", selection: buttonActionBinding(.button4)) {
                 ForEach(MouseButtonAction.allCases, id: \.self) { action in
                     Text(action.displayName).tag(action)
@@ -541,16 +541,16 @@ private struct DeviceCard: View {
             }
             .pickerStyle(.menu)
             .disabled(!currentDeviceValue(for: .button4))
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Button 5",
                 subtitle: "Enable handling for the back side button.",
                 systemImage: "arrow.left.circle",
                 isOn: buttonEnabledBinding(.button5)
             )
-            
+
             Picker("Button 5 action", selection: buttonActionBinding(.button5)) {
                 ForEach(MouseButtonAction.allCases, id: \.self) { action in
                     Text(action.displayName).tag(action)
@@ -560,7 +560,7 @@ private struct DeviceCard: View {
             .disabled(!currentDeviceValue(for: .button5))
         }
     }
-    
+
     private func buttonEnabledBinding(_ buttonType: MouseButtonType) -> Binding<Bool> {
         Binding {
             currentDeviceValue(for: buttonType)
@@ -568,7 +568,7 @@ private struct DeviceCard: View {
             mouseManager.updateButtonSettings(for: device.id, buttonType: buttonType, enabled: isEnabled)
         }
     }
-    
+
     private func buttonActionBinding(_ buttonType: MouseButtonType) -> Binding<MouseButtonAction> {
         Binding {
             currentActionValue(for: buttonType)
@@ -576,10 +576,10 @@ private struct DeviceCard: View {
             mouseManager.updateButtonAction(for: device.id, buttonType: buttonType, action: action)
         }
     }
-    
+
     private func currentDeviceValue(for buttonType: MouseButtonType) -> Bool {
         let currentDevice = mouseManager.deviceSettings[device.id] ?? device
-        
+
         switch buttonType {
         case .left: return currentDevice.leftButtonEnabled
         case .right: return currentDevice.rightButtonEnabled
@@ -588,10 +588,10 @@ private struct DeviceCard: View {
         case .button5: return currentDevice.button5Enabled
         }
     }
-    
+
     private func currentActionValue(for buttonType: MouseButtonType) -> MouseButtonAction {
         let currentDevice = mouseManager.deviceSettings[device.id] ?? device
-        
+
         switch buttonType {
         case .button4: return currentDevice.button4Action
         case .button5: return currentDevice.button5Action
@@ -602,13 +602,13 @@ private struct DeviceCard: View {
 
 private struct AppSettingsView: View {
     let launchAtLogin: LaunchAtLogin
-    
+
     var body: some View {
         SettingsHeader(
             title: "App",
             subtitle: "Manage startup behavior and app-level controls."
         )
-        
+
         SettingsCard {
             SettingToggleRow(
                 title: "Launch at login",
@@ -620,9 +620,9 @@ private struct AppSettingsView: View {
                     launchAtLogin.setEnabled($0)
                 }
             )
-            
+
             Divider()
-            
+
             Button(role: .destructive) {
                 NSApplication.shared.terminate(nil)
             } label: {
@@ -635,12 +635,12 @@ private struct AppSettingsView: View {
 private struct SettingsHeader: View {
     let title: String
     let subtitle: String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
-            
+
             Text(subtitle)
                 .font(.body)
                 .foregroundStyle(.secondary)
@@ -652,12 +652,12 @@ private struct SettingsHeader: View {
 private struct SettingsCard<Content: View>: View {
     var spacing: CGFloat = 12
     let content: Content
-    
+
     init(spacing: CGFloat = 12, @ViewBuilder content: () -> Content) {
         self.spacing = spacing
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
             content
@@ -677,26 +677,26 @@ private struct SettingToggleRow: View {
     let subtitle: String
     let systemImage: String
     @Binding var isOn: Bool
-    
+
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.tint)
                 .frame(width: 28)
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.headline)
-                
+
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            
+
             Spacer(minLength: 16)
-            
+
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
         }
@@ -708,7 +708,7 @@ private struct StatusPill: View {
     let value: String
     let systemImage: String
     let tint: Color
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
@@ -716,17 +716,17 @@ private struct StatusPill: View {
                 .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                
+
                 Text(value)
                     .font(.callout.weight(.semibold))
                     .lineLimit(2)
             }
-            
+
             Spacer(minLength: 12)
         }
         .padding(.horizontal, 12)
@@ -747,16 +747,16 @@ private struct EmptyStateView: View {
     let title: String
     let subtitle: String
     let systemImage: String
-    
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(.secondary)
-            
+
             Text(title)
                 .font(.headline)
-            
+
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

@@ -1,10 +1,3 @@
-//
-//  CleanupModels.swift
-//  macos-support-tools
-//
-//  Created by Codex on 2026-06-04.
-//
-
 import Foundation
 
 enum CleanupCategoryID: String, CaseIterable, Identifiable, Codable {
@@ -13,14 +6,14 @@ enum CleanupCategoryID: String, CaseIterable, Identifiable, Codable {
     case xcodeDerivedData
     case logs
     case trash
-    
+
     var id: String { rawValue }
 }
 
 enum CleanupRiskLevel: String, Codable {
     case safe = "Safe"
     case review = "Review"
-    
+
     var description: String {
         switch self {
         case .safe:
@@ -42,7 +35,7 @@ struct CleanupCategory: Identifiable, Codable {
 
 struct CleanupItem: Identifiable, Codable {
     var id: URL { url }
-    
+
     let url: URL
     let size: Int64
     let modifiedDate: Date?
@@ -50,10 +43,9 @@ struct CleanupItem: Identifiable, Codable {
 
 struct CleanupScanResult: Identifiable, Codable {
     var id: CleanupCategoryID { category.id }
-    
+
     let category: CleanupCategory
     let totalBytes: Int64
     let itemCount: Int
     let items: [CleanupItem]
 }
-
