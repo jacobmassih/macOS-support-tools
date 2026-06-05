@@ -68,7 +68,20 @@ struct ContentView: View {
         .frame(minWidth: 820, minHeight: 560)
         .onAppear {
             launchAtLogin.refresh()
+            consumePendingNavigationTarget()
         }
+        .onReceive(NotificationCenter.default.publisher(for: SettingsNavigation.requestedNotification)) { _ in
+            consumePendingNavigationTarget()
+        }
+    }
+    
+    private func consumePendingNavigationTarget() {
+        guard let target = SettingsNavigation.consumePendingTarget(),
+              let section = SettingsSection(rawValue: target) else {
+            return
+        }
+        
+        selectedSection = section
     }
 }
 

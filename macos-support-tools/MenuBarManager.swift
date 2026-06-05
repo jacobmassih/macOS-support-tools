@@ -30,8 +30,12 @@ struct MenuBarManager: View {
             ))
 
             Button {
+                SettingsNavigation.setPendingCleanupTarget()
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "main")
+                DispatchQueue.main.async {
+                    SettingsNavigation.notifyPendingTarget()
+                }
                 Task {
                     await cleanupManager.scan()
                 }
