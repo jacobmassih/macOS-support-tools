@@ -283,7 +283,7 @@ private struct CleanupSettingsView: View {
     var body: some View {
         SettingsHeader(
             title: "Cleanup",
-            subtitle: "Scan safe cleanup areas and estimate how much space can be recovered. Phase 1 only scans and never deletes files."
+            subtitle: "Scan cleanup areas, review candidates, and move selected items to Trash."
         )
 
         SettingsCard {
@@ -317,7 +317,7 @@ private struct CleanupSettingsView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(cleanupManager.isScanning)
+                .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
             }
 
             if let lastScanDate = cleanupManager.lastScanDate {
@@ -335,12 +335,18 @@ private struct CleanupSettingsView: View {
                 Label(lastError, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
             }
+
+            if let lastCleanupResult = cleanupManager.lastCleanupResult {
+                Divider()
+
+                CleanupRunSummary(result: lastCleanupResult)
+            }
         }
 
         if cleanupManager.scanResults.isEmpty {
             EmptyStateView(
                 title: cleanupManager.isScanning ? "Scanning cleanup areas" : "No scan results yet",
-                subtitle: cleanupManager.isScanning ? "Checking caches, temporary files, Xcode build data, logs, and Trash." : "Start with a scan. Nothing will be deleted or changed.",
+                subtitle: cleanupManager.isScanning ? "Checking caches, temporary files, Xcode build data, logs, and Trash." : "Start with a scan to find cleanup candidates.",
                 systemImage: cleanupManager.isScanning ? "hourglass" : "sparkle.magnifyingglass"
             )
         } else {
@@ -353,7 +359,48 @@ private struct CleanupSettingsView: View {
     }
 }
 
+private struct CleanupRunSummary: View {
+    let result: CleanupRunResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(summaryText, systemImage: result.skippedItems.isEmpty ? "checkmark.circle" : "exclamationmark.triangle")
+                .foregroundStyle(result.skippedItems.isEmpty ? .green : .orange)
+
+            if !result.skippedItems.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(result.skippedItems.prefix(3)) { skippedItem in
+                        Text("\(skippedItem.item.url.lastPathComponent): \(skippedItem.reason)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    if result.skippedItems.count > 3 {
+                        Text("\(result.skippedItems.count - 3) more skipped item\(result.skippedItems.count - 3 == 1 ? "" : "s").")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var summaryText: String {
+        let movedText = "\(result.trashedItems.count) item\(result.trashedItems.count == 1 ? "" : "s") moved to Trash"
+        let sizeText = ByteCountFormatter.cleanupString(fromByteCount: result.trashedBytes)
+
+        if result.skippedItems.isEmpty {
+            return "\(movedText) (\(sizeText))."
+        }
+
+        return "\(movedText) (\(sizeText)); \(result.skippedItems.count) skipped."
+    }
+}
+
 private struct CleanupResultCard: View {
+    @Environment(CleanupManager.self) private var cleanupManager
     let result: CleanupScanResult
 
     var body: some View {
@@ -393,6 +440,20 @@ private struct CleanupResultCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Button {
+                    Task {
+                        await cleanupManager.clean(items: result.items)
+                    }
+                } label: {
+                    if cleanupManager.isCleaning {
+                        Label("Moving...", systemImage: "hourglass")
+                    } else {
+                        Label("Move to Trash", systemImage: "trash")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
             }
 
             Divider()

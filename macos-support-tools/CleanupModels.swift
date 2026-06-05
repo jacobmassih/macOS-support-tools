@@ -49,3 +49,27 @@ struct CleanupScanResult: Identifiable, Codable {
     let itemCount: Int
     let items: [CleanupItem]
 }
+
+struct CleanupSkippedItem: Identifiable, Codable {
+    var id: URL { item.url }
+
+    let item: CleanupItem
+    let reason: String
+}
+
+struct CleanupRunResult: Codable {
+    let trashedItems: [CleanupItem]
+    let skippedItems: [CleanupSkippedItem]
+
+    var trashedBytes: Int64 {
+        trashedItems.reduce(0) { $0 + $1.size }
+    }
+
+    var skippedBytes: Int64 {
+        skippedItems.reduce(0) { $0 + $1.item.size }
+    }
+
+    var didTrashAnyItems: Bool {
+        !trashedItems.isEmpty
+    }
+}
