@@ -28,19 +28,35 @@ struct CleanupSettingsView: View {
 
                 Spacer(minLength: 16)
 
-                Button {
-                    Task {
-                        await cleanupManager.scan()
+                HStack(spacing: 10) {
+                    Button {
+                        Task {
+                            await cleanupManager.clearAllCaches()
+                        }
+                    } label: {
+                        if cleanupManager.isCleaning {
+                            Label("Clearing...", systemImage: "hourglass")
+                        } else {
+                            Label("Clear All Caches", systemImage: "trash")
+                        }
                     }
-                } label: {
-                    if cleanupManager.isScanning {
-                        Label("Scanning...", systemImage: "hourglass")
-                    } else {
-                        Label("Scan Mac", systemImage: "sparkle.magnifyingglass")
+                    .buttonStyle(.bordered)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
+
+                    Button {
+                        Task {
+                            await cleanupManager.scan()
+                        }
+                    } label: {
+                        if cleanupManager.isScanning {
+                            Label("Scanning...", systemImage: "hourglass")
+                        } else {
+                            Label("Scan Mac", systemImage: "sparkle.magnifyingglass")
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
             }
 
             if let lastScanDate = cleanupManager.lastScanDate {

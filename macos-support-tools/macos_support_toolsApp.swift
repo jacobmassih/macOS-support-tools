@@ -9,6 +9,7 @@ struct macos_support_toolsApp: App {
         MenuBarExtra("Support Tools", systemImage: "computermouse") {
             MenuBarManager()
                 .environment(mouseManager)
+                .environment(cleanupManager)
         }
         Window("Settings", id: "main") {
             ContentView()

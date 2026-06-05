@@ -217,6 +217,57 @@ struct macos_support_toolsTests {
         #expect(!manager.isCleaning)
     }
 
+    @Test @MainActor func cleanupManagerClearAllCachesOnlyCleansUserCaches() async throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let cacheRootURL = rootURL.appending(path: "Caches", directoryHint: .isDirectory)
+        let tempRootURL = rootURL.appending(path: "Temporary", directoryHint: .isDirectory)
+        let cacheItemURL = cacheRootURL.appending(path: "cache-item")
+        let tempItemURL = tempRootURL.appending(path: "temp-item")
+        let recorder = TrashRecorder()
+
+        try fileManager.createDirectory(at: cacheRootURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: tempRootURL, withIntermediateDirectories: true)
+        try Data("cache".utf8).write(to: cacheItemURL)
+        try Data("temp".utf8).write(to: tempItemURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let manager = CleanupManager(
+            fileClient: CleanupFileClient(
+                fileExists: { _ in true },
+                isDeletable: { _ in true },
+                trashItem: { recorder.record($0) }
+            ),
+            categories: [
+                CleanupCategory(
+                    id: .userCaches,
+                    title: "Caches",
+                    subtitle: "Test caches",
+                    systemImage: "shippingbox",
+                    paths: [cacheRootURL],
+                    riskLevel: .safe
+                ),
+                CleanupCategory(
+                    id: .temporaryFiles,
+                    title: "Temporary",
+                    subtitle: "Test temporary files",
+                    systemImage: "clock",
+                    paths: [tempRootURL],
+                    riskLevel: .safe
+                )
+            ]
+        )
+
+        await manager.clearAllCaches()
+
+        #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
+        #expect(manager.lastCleanupResult?.skippedItems.isEmpty == true)
+        #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
+    }
+
     @Test @MainActor func cleanupManagerDefaultCategoriesSelectExpectedPaths() {
         let manager = CleanupManager()
         let categoryIDs = manager.categories.map(\.id)

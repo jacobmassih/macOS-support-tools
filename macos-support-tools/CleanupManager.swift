@@ -136,6 +136,29 @@ final class CleanupManager {
         isCleaning = false
     }
 
+    @MainActor
+    func clearAllCaches() async {
+        guard let cacheCategory = categories.first(where: { $0.id == .userCaches }) else {
+            lastCleanupResult = CleanupRunResult(trashedItems: [], skippedItems: [])
+            return
+        }
+
+        let cacheResult: CleanupScanResult
+
+        if let existingResult = scanResults.first(where: { $0.category.id == .userCaches }) {
+            cacheResult = existingResult
+        } else {
+            cacheResult = (try? Self.scan(category: cacheCategory)) ?? CleanupScanResult(
+                category: cacheCategory,
+                totalBytes: 0,
+                itemCount: 0,
+                items: []
+            )
+        }
+
+        await clean(items: cacheResult.items)
+    }
+
     nonisolated static func scan(category: CleanupCategory) throws -> CleanupScanResult {
         let items = category.paths.flatMap { path -> [CleanupItem] in
             guard FileManager.default.fileExists(atPath: path.path) else {
