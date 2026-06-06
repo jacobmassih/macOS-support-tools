@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MenuBarManager: View {
     @Environment(MouseManager.self) var mouseManager: MouseManager
-    @Environment(CleanupManager.self) var cleanupManager: CleanupManager
     @State private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
 
@@ -21,21 +20,6 @@ struct MenuBarManager: View {
                 get: { launchAtLogin.isEnabled },
                 set: { launchAtLogin.setEnabled($0) }
             ))
-
-            Button {
-                SettingsNavigation.setPendingCleanupTarget()
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "main")
-                DispatchQueue.main.async {
-                    SettingsNavigation.notifyPendingTarget()
-                }
-                Task {
-                    await cleanupManager.scan()
-                }
-            } label: {
-                Label("Scan Cleanup", systemImage: "sparkle.magnifyingglass")
-            }
-            .disabled(cleanupManager.isScanning)
 
             Button("Settings") {
                 NSApp.activate(ignoringOtherApps: true)
@@ -61,6 +45,5 @@ struct StatusBarManager_Previews: PreviewProvider {
     static var previews: some View {
         MenuBarManager()
             .environment(MouseManager())
-            .environment(CleanupManager())
     }
 }
