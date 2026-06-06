@@ -1,10 +1,3 @@
-//
-//  macos_support_toolsUITestsLaunchTests.swift
-//  macos-support-toolsUITests
-//
-//  Created by Jacob Massih on 2025-09-26.
-//
-
 import XCTest
 
 final class macos_support_toolsUITestsLaunchTests: XCTestCase {

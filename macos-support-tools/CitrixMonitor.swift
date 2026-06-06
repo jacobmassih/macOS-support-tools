@@ -1,10 +1,3 @@
-//
-//  CitrixMonitor.swift
-//  macos-support-tools
-//
-//  Created by Jacob Massih on 2025-10-26.
-//
-
 import Foundation
 import AppKit
 
