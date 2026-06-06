@@ -1,10 +1,3 @@
-//
-//  MouseEventHandlers.swift
-//  macos-support-tools
-//
-//  Created by Jacob Massih on 2025-09-28.
-//
-
 import Foundation
 import CoreGraphics
 import IOKit.hid

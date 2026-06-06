@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  macos-support-tools
-//
-//  Created by Jacob Massih on 2025-09-26.
-//
-
 import SwiftUI
 
 private enum SettingsSection: String, CaseIterable, Identifiable {

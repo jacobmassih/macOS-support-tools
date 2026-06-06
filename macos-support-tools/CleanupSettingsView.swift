@@ -1,10 +1,3 @@
-//
-//  CleanupSettingsView.swift
-//  macos-support-tools
-//
-//  Created by Codex on 2026-06-06.
-//
-
 import SwiftUI
 
 struct CleanupSettingsView: View {

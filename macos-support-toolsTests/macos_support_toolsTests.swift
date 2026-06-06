@@ -1,10 +1,3 @@
-//
-//  macos_support_toolsTests.swift
-//  macos-support-toolsTests
-//
-//  Created by Jacob Massih on 2025-09-26.
-//
-
 import Foundation
 import Testing
 @testable import macos_support_tools

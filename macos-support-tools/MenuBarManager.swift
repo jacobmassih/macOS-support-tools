@@ -1,10 +1,3 @@
-//
-//  StatusBarManager.swift
-//  macos-support-tools
-//
-//  Created by Jacob Massih on 2025-09-28.
-//
-
 import SwiftUI
 
 struct MenuBarManager: View {

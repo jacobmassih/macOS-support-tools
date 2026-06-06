@@ -1,9 +1,3 @@
-//
-//  LaunchAtLogin.swift
-//  macos-support-tools
-//
-//  Created by Jacob Massih on 2025-10-02.
-//
 import Foundation
 import ServiceManagement
 import Observation
