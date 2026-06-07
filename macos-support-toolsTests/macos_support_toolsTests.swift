@@ -35,6 +35,36 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
+    @Test func cleanupScanIgnoresZeroByteCandidates() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let emptyFileURL = rootURL.appending(path: "empty.tmp")
+        let payloadURL = rootURL.appending(path: "payload.tmp")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data().write(to: emptyFileURL)
+        try Data("payload".utf8).write(to: payloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.map { $0.url.resolvingSymlinksInPath() } == [payloadURL.resolvingSymlinksInPath()])
+        #expect(result.totalBytes > 0)
+    }
+
     @Test func cleanupMovesDeletableItemsToTrash() throws {
         let firstURL = URL(filePath: "/tmp/cleanup-first")
         let secondURL = URL(filePath: "/tmp/cleanup-second")
