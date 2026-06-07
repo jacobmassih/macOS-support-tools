@@ -373,6 +373,33 @@ struct macos_support_toolsTests {
         #expect(result.skippedItems.first?.id == skipped.url)
     }
 
+    @Test func cleanupScanResultPreviewDetailsSummarizeCandidates() {
+        let olderDate = Date(timeIntervalSince1970: 1_000)
+        let newerDate = Date(timeIntervalSince1970: 2_000)
+        let smallItem = CleanupItem(url: URL(filePath: "/tmp/small"), size: 10, modifiedDate: newerDate)
+        let mediumItem = CleanupItem(url: URL(filePath: "/tmp/medium"), size: 20, modifiedDate: nil)
+        let largeItem = CleanupItem(url: URL(filePath: "/tmp/large"), size: 30, modifiedDate: olderDate)
+        let category = CleanupCategory(
+            id: .temporaryFiles,
+            title: "Temporary",
+            subtitle: "Temporary fixtures",
+            systemImage: "clock",
+            paths: [URL(filePath: "/tmp")],
+            riskLevel: .safe
+        )
+        let scanResult = CleanupScanResult(
+            category: category,
+            totalBytes: 60,
+            itemCount: 3,
+            items: [smallItem, mediumItem, largeItem]
+        )
+
+        #expect(scanResult.largestItem?.url == largeItem.url)
+        #expect(scanResult.mostRecentModifiedDate == newerDate)
+        #expect(scanResult.oldestModifiedDate == olderDate)
+        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
+    }
+
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
         let item = CleanupItem(url: URL(filePath: "/tmp/model-item"), size: 1, modifiedDate: nil)
         let category = CleanupCategory(
