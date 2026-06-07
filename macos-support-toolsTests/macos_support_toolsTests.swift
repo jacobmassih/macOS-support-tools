@@ -278,6 +278,53 @@ struct macos_support_toolsTests {
         #expect(manager.categories.contains { $0.id == .trash && $0.riskLevel == .review })
     }
 
+    @Test func cleanupCatalogDefaultCategoriesStayInModelOrder() {
+        let categories = CleanupCatalog.defaultCategories()
+
+        #expect(categories.map(\.id) == CleanupCategoryID.allCases)
+        #expect(categories.first?.paths.first?.lastPathComponent == "Caches")
+        #expect(categories.contains { $0.id == .temporaryFiles && $0.paths.count == 2 })
+        #expect(categories.contains { $0.id == .trash && $0.riskLevel == .review })
+    }
+
+    @Test func mouseDeviceStoreRoundTripsDeviceSettings() throws {
+        let suiteName = "MouseDeviceStoreTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = MouseDeviceStore(userDefaults: userDefaults)
+        let device = MouseDevice(
+            id: "123-456-location-789",
+            name: "Test Mouse",
+            vendorID: 123,
+            productID: 456,
+            naturalScrollEnabled: false,
+            lastConnected: Date(timeIntervalSince1970: 1_234),
+            leftButtonEnabled: true,
+            rightButtonEnabled: true,
+            middleButtonEnabled: true,
+            button4Enabled: false,
+            button5Enabled: true,
+            button4Action: .middleClick,
+            button5Action: .back
+        )
+
+        store.save([device.id: device])
+        let loadedDevice = store.load()?[device.id]
+
+        #expect(loadedDevice?.id == device.id)
+        #expect(loadedDevice?.name == device.name)
+        #expect(loadedDevice?.vendorID == device.vendorID)
+        #expect(loadedDevice?.productID == device.productID)
+        #expect(loadedDevice?.naturalScrollEnabled == device.naturalScrollEnabled)
+        #expect(loadedDevice?.lastConnected == device.lastConnected)
+        #expect(loadedDevice?.button4Enabled == device.button4Enabled)
+        #expect(loadedDevice?.button4Action == device.button4Action)
+        #expect(loadedDevice?.button5Action == device.button5Action)
+    }
+
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
         let moved = CleanupItem(url: URL(filePath: "/tmp/moved"), size: 10, modifiedDate: nil)
         let skipped = CleanupItem(url: URL(filePath: "/tmp/skipped"), size: 20, modifiedDate: nil)

@@ -26,65 +26,7 @@ final class CleanupManager {
     }
 
     var categories: [CleanupCategory] {
-        if let customCategories {
-            return customCategories
-        }
-
-        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-
-        return [
-            CleanupCategory(
-                id: .userCaches,
-                title: "User Caches",
-                subtitle: "App cache files in your user Library. Apps may recreate these after cleanup.",
-                systemImage: "shippingbox",
-                paths: [
-                    homeDirectory.appending(path: "Library/Caches", directoryHint: .isDirectory)
-                ],
-                riskLevel: .safe
-            ),
-            CleanupCategory(
-                id: .temporaryFiles,
-                title: "Temporary Files",
-                subtitle: "Short-lived files from macOS and apps.",
-                systemImage: "clock.arrow.circlepath",
-                paths: [
-                    URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory),
-                    URL(filePath: "/private/tmp", directoryHint: .isDirectory)
-                ],
-                riskLevel: .safe
-            ),
-            CleanupCategory(
-                id: .xcodeDerivedData,
-                title: "Xcode DerivedData",
-                subtitle: "Build intermediates that Xcode can regenerate.",
-                systemImage: "hammer",
-                paths: [
-                    homeDirectory.appending(path: "Library/Developer/Xcode/DerivedData", directoryHint: .isDirectory)
-                ],
-                riskLevel: .safe
-            ),
-            CleanupCategory(
-                id: .logs,
-                title: "Logs",
-                subtitle: "User diagnostic logs. Recent logs can help troubleshoot apps.",
-                systemImage: "doc.text.magnifyingglass",
-                paths: [
-                    homeDirectory.appending(path: "Library/Logs", directoryHint: .isDirectory)
-                ],
-                riskLevel: .review
-            ),
-            CleanupCategory(
-                id: .trash,
-                title: "Trash",
-                subtitle: "Items already moved to Trash. Review before emptying in Finder.",
-                systemImage: "trash",
-                paths: [
-                    homeDirectory.appending(path: ".Trash", directoryHint: .isDirectory)
-                ],
-                riskLevel: .review
-            )
-        ]
+        customCategories ?? CleanupCatalog.defaultCategories()
     }
 
     @MainActor
@@ -288,19 +230,4 @@ final class CleanupManager {
     nonisolated private static func modifiedDate(for url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
-}
-
-struct CleanupFileClient: Sendable {
-    var fileExists: @Sendable (URL) -> Bool
-    var isDeletable: @Sendable (URL) -> Bool
-    var trashItem: @Sendable (URL) throws -> Void
-
-    nonisolated static let live = CleanupFileClient(
-        fileExists: { FileManager.default.fileExists(atPath: $0.path) },
-        isDeletable: { FileManager.default.isDeletableFile(atPath: $0.path) },
-        trashItem: { url in
-            var resultingURL: NSURL?
-            try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
-        }
-    )
 }

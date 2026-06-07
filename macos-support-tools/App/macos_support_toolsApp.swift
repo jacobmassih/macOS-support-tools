@@ -11,7 +11,7 @@ struct macos_support_toolsApp: App {
                 .environment(mouseManager)
         }
         Window("Settings", id: "main") {
-            ContentView()
+            SettingsRootView()
                 .environment(mouseManager)
                 .environment(cleanupManager)
         }
