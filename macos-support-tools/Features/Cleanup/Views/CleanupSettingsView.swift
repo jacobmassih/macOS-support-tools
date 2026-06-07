@@ -5,8 +5,8 @@ struct CleanupSettingsView: View {
 
     var body: some View {
         SettingsHeader(
-            title: "Cleanup",
-            subtitle: "Scan cleanup areas, review candidates, and move selected items to Trash."
+            title: "Disk Cleanup",
+            subtitle: "Scan disk cleanup areas, review candidates, and move selected items to Trash."
         )
 
         SettingsCard {
@@ -84,7 +84,7 @@ struct CleanupSettingsView: View {
 
         if cleanupManager.scanResults.isEmpty {
             EmptyStateView(
-                title: cleanupManager.isScanning ? "Scanning cleanup areas" : "No scan results yet",
+                title: cleanupManager.isScanning ? "Scanning disk cleanup areas" : "No scan results yet",
                 subtitle: cleanupManager.isScanning ? "Checking caches, temporary files, Xcode build data, logs, and Trash." : "Start with a scan to find cleanup candidates.",
                 systemImage: cleanupManager.isScanning ? "hourglass" : "sparkle.magnifyingglass"
             )
