@@ -54,6 +54,7 @@ struct SettingsRootView: View {
                 }
                 .padding(28)
                 .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(.background)
         }
