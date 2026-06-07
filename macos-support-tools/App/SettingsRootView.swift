@@ -3,7 +3,7 @@ import SwiftUI
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case mouse = "Mouse"
-    case cleanup = "Cleanup"
+    case cleanup = "Disk Cleanup"
     case citrix = "Citrix"
     case devices = "Devices"
     case app = "App"
@@ -54,6 +54,7 @@ struct SettingsRootView: View {
                 }
                 .padding(28)
                 .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(.background)
         }

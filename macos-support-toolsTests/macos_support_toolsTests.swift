@@ -35,6 +35,36 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
+    @Test func cleanupScanIgnoresZeroByteCandidates() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let emptyFileURL = rootURL.appending(path: "empty.tmp")
+        let payloadURL = rootURL.appending(path: "payload.tmp")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data().write(to: emptyFileURL)
+        try Data("payload".utf8).write(to: payloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.map { $0.url.resolvingSymlinksInPath() } == [payloadURL.resolvingSymlinksInPath()])
+        #expect(result.totalBytes > 0)
+    }
+
     @Test func cleanupMovesDeletableItemsToTrash() throws {
         let firstURL = URL(filePath: "/tmp/cleanup-first")
         let secondURL = URL(filePath: "/tmp/cleanup-second")
@@ -341,6 +371,33 @@ struct macos_support_toolsTests {
         #expect(result.trashedBytes == 10)
         #expect(result.skippedBytes == 20)
         #expect(result.skippedItems.first?.id == skipped.url)
+    }
+
+    @Test func cleanupScanResultPreviewDetailsSummarizeCandidates() {
+        let olderDate = Date(timeIntervalSince1970: 1_000)
+        let newerDate = Date(timeIntervalSince1970: 2_000)
+        let smallItem = CleanupItem(url: URL(filePath: "/tmp/small"), size: 10, modifiedDate: newerDate)
+        let mediumItem = CleanupItem(url: URL(filePath: "/tmp/medium"), size: 20, modifiedDate: nil)
+        let largeItem = CleanupItem(url: URL(filePath: "/tmp/large"), size: 30, modifiedDate: olderDate)
+        let category = CleanupCategory(
+            id: .temporaryFiles,
+            title: "Temporary",
+            subtitle: "Temporary fixtures",
+            systemImage: "clock",
+            paths: [URL(filePath: "/tmp")],
+            riskLevel: .safe
+        )
+        let scanResult = CleanupScanResult(
+            category: category,
+            totalBytes: 60,
+            itemCount: 3,
+            items: [smallItem, mediumItem, largeItem]
+        )
+
+        #expect(scanResult.largestItem?.url == largeItem.url)
+        #expect(scanResult.mostRecentModifiedDate == newerDate)
+        #expect(scanResult.oldestModifiedDate == olderDate)
+        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {

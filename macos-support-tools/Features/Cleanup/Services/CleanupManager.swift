@@ -109,6 +109,7 @@ final class CleanupManager {
 
             return cleanupItems(in: path)
         }
+        .filter { $0.size > 0 }
         .sorted { $0.size > $1.size }
 
         return CleanupScanResult(
