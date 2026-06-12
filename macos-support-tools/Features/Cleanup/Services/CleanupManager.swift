@@ -17,6 +17,10 @@ final class CleanupManager {
         scanResults.reduce(0) { $0 + $1.totalBytes }
     }
 
+    var canClearAllCaches: Bool {
+        scanResults.contains { $0.category.id == .userCaches }
+    }
+
     init(
         fileClient: CleanupFileClient = .live,
         categories: [CleanupCategory]? = nil
@@ -80,22 +84,9 @@ final class CleanupManager {
 
     @MainActor
     func clearAllCaches() async {
-        guard let cacheCategory = categories.first(where: { $0.id == .userCaches }) else {
-            lastCleanupResult = CleanupRunResult(trashedItems: [], skippedItems: [])
+        guard let cacheResult = scanResults.first(where: { $0.category.id == .userCaches }) else {
+            lastError = "Run a scan before clearing caches."
             return
-        }
-
-        let cacheResult: CleanupScanResult
-
-        if let existingResult = scanResults.first(where: { $0.category.id == .userCaches }) {
-            cacheResult = existingResult
-        } else {
-            cacheResult = (try? Self.scan(category: cacheCategory)) ?? CleanupScanResult(
-                category: cacheCategory,
-                totalBytes: 0,
-                itemCount: 0,
-                items: []
-            )
         }
 
         await clean(items: cacheResult.items)

@@ -41,7 +41,7 @@ struct CleanupSettingsView: View {
                         }
                     }
                     .buttonStyle(.bordered)
-                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
+                    .disabled(!cleanupManager.canClearAllCaches || cleanupManager.isScanning || cleanupManager.isCleaning)
 
                     Button {
                         Task {
