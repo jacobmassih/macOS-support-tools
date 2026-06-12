@@ -51,7 +51,8 @@ import Observation
 
     init(
         userDefaults: UserDefaults = .standard,
-        deviceStore: MouseDeviceStore? = nil
+        deviceStore: MouseDeviceStore? = nil,
+        startsSystemServices: Bool = true
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
@@ -65,17 +66,23 @@ import Observation
         ])
 
         print("[MouseManager] Initialized and starting up.")
+        loadDeviceSettings()
+
+        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
+        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
+        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
+
+        guard startsSystemServices else {
+            updateTapStatus()
+            return
+        }
+
         refreshAccessibilityTrust()
         deviceMonitor.start()
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
         updateTapStatus()
-        loadDeviceSettings()
         deviceMonitor.startPolling()
-
-        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
-        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
-        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
     }
 
     deinit {

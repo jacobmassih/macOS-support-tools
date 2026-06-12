@@ -35,6 +35,36 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
+    @Test func cleanupScanIgnoresZeroByteCandidates() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let emptyFileURL = rootURL.appending(path: "empty.tmp")
+        let payloadURL = rootURL.appending(path: "payload.tmp")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data().write(to: emptyFileURL)
+        try Data("payload".utf8).write(to: payloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.map { $0.url.resolvingSymlinksInPath() } == [payloadURL.resolvingSymlinksInPath()])
+        #expect(result.totalBytes > 0)
+    }
+
     @Test func cleanupMovesDeletableItemsToTrash() throws {
         let firstURL = URL(filePath: "/tmp/cleanup-first")
         let secondURL = URL(filePath: "/tmp/cleanup-second")
@@ -217,7 +247,7 @@ struct macos_support_toolsTests {
         #expect(!manager.isCleaning)
     }
 
-    @Test @MainActor func cleanupManagerClearAllCachesOnlyCleansUserCaches() async throws {
+    @Test @MainActor func cleanupManagerClearAllCachesRequiresScanAndOnlyCleansUserCaches() async throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -263,6 +293,15 @@ struct macos_support_toolsTests {
 
         await manager.clearAllCaches()
 
+        #expect(manager.lastError == "Run a scan before clearing caches.")
+        #expect(manager.lastCleanupResult == nil)
+        #expect(recorder.urls.isEmpty)
+        #expect(fileManager.fileExists(atPath: cacheItemURL.path))
+        #expect(fileManager.fileExists(atPath: tempItemURL.path))
+
+        await manager.scan()
+        await manager.clearAllCaches()
+
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.isEmpty == true)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
@@ -295,16 +334,11 @@ struct macos_support_toolsTests {
         }
 
         let store = MouseDeviceStore(userDefaults: userDefaults)
-        let device = MouseDevice(
-            id: "123-456-location-789",
-            name: "Test Mouse",
-            vendorID: 123,
-            productID: 456,
+        let device = makeMouseDevice(
             naturalScrollEnabled: false,
-            lastConnected: Date(timeIntervalSince1970: 1_234),
-            leftButtonEnabled: true,
+            leftButtonEnabled: false,
             rightButtonEnabled: true,
-            middleButtonEnabled: true,
+            middleButtonEnabled: false,
             button4Enabled: false,
             button5Enabled: true,
             button4Action: .middleClick,
@@ -320,9 +354,83 @@ struct macos_support_toolsTests {
         #expect(loadedDevice?.productID == device.productID)
         #expect(loadedDevice?.naturalScrollEnabled == device.naturalScrollEnabled)
         #expect(loadedDevice?.lastConnected == device.lastConnected)
+        #expect(loadedDevice?.leftButtonEnabled == device.leftButtonEnabled)
+        #expect(loadedDevice?.rightButtonEnabled == device.rightButtonEnabled)
+        #expect(loadedDevice?.middleButtonEnabled == device.middleButtonEnabled)
         #expect(loadedDevice?.button4Enabled == device.button4Enabled)
+        #expect(loadedDevice?.button5Enabled == device.button5Enabled)
         #expect(loadedDevice?.button4Action == device.button4Action)
         #expect(loadedDevice?.button5Action == device.button5Action)
+    }
+
+    @Test func mouseManagerNaturalScrollTogglePersistsAndControlsExternalMouseReversal() throws {
+        let suiteName = "MouseManagerNaturalScrollTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let device = makeMouseDevice()
+
+        #expect(manager.naturalScrollEnabled)
+        #expect(!manager.shouldReverseScroll())
+
+        manager.setDetectedDevices([device])
+        #expect(!manager.shouldReverseScroll())
+
+        manager.toggleScrollDirection()
+        #expect(!manager.naturalScrollEnabled)
+        #expect(manager.shouldReverseScroll())
+        #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
+
+        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        reloadedManager.setDetectedDevices([device])
+        #expect(!reloadedManager.naturalScrollEnabled)
+        #expect(reloadedManager.shouldReverseScroll())
+    }
+
+    @Test func mouseManagerButtonSettingsAndActionsPersistPerDevice() throws {
+        let suiteName = "MouseManagerButtonSettingsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let device = makeMouseDevice()
+
+        manager.addDevice(device)
+        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .right, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .middle, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
+        manager.updateButtonAction(for: device.id, buttonType: .button5, action: .none)
+        manager.toggleMouseButtons()
+
+        let updatedDevice = try #require(manager.deviceSettings[device.id])
+        #expect(!updatedDevice.leftButtonEnabled)
+        #expect(!updatedDevice.rightButtonEnabled)
+        #expect(!updatedDevice.middleButtonEnabled)
+        #expect(!updatedDevice.button4Enabled)
+        #expect(!updatedDevice.button5Enabled)
+        #expect(updatedDevice.button4Action == .middleClick)
+        #expect(updatedDevice.button5Action == .none)
+        #expect(!manager.mouseButtonsEnabled)
+        #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.mouseButtonsEnabled))
+
+        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let reloadedDevice = try #require(reloadedManager.deviceSettings[device.id])
+        #expect(!reloadedDevice.leftButtonEnabled)
+        #expect(!reloadedDevice.rightButtonEnabled)
+        #expect(!reloadedDevice.middleButtonEnabled)
+        #expect(!reloadedDevice.button4Enabled)
+        #expect(!reloadedDevice.button5Enabled)
+        #expect(reloadedDevice.button4Action == .middleClick)
+        #expect(reloadedDevice.button5Action == .none)
+        #expect(!reloadedManager.mouseButtonsEnabled)
     }
 
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
@@ -341,6 +449,33 @@ struct macos_support_toolsTests {
         #expect(result.trashedBytes == 10)
         #expect(result.skippedBytes == 20)
         #expect(result.skippedItems.first?.id == skipped.url)
+    }
+
+    @Test func cleanupScanResultPreviewDetailsSummarizeCandidates() {
+        let olderDate = Date(timeIntervalSince1970: 1_000)
+        let newerDate = Date(timeIntervalSince1970: 2_000)
+        let smallItem = CleanupItem(url: URL(filePath: "/tmp/small"), size: 10, modifiedDate: newerDate)
+        let mediumItem = CleanupItem(url: URL(filePath: "/tmp/medium"), size: 20, modifiedDate: nil)
+        let largeItem = CleanupItem(url: URL(filePath: "/tmp/large"), size: 30, modifiedDate: olderDate)
+        let category = CleanupCategory(
+            id: .temporaryFiles,
+            title: "Temporary",
+            subtitle: "Temporary fixtures",
+            systemImage: "clock",
+            paths: [URL(filePath: "/tmp")],
+            riskLevel: .safe
+        )
+        let scanResult = CleanupScanResult(
+            category: category,
+            totalBytes: 60,
+            itemCount: 3,
+            items: [smallItem, mediumItem, largeItem]
+        )
+
+        #expect(scanResult.largestItem?.url == largeItem.url)
+        #expect(scanResult.mostRecentModifiedDate == newerDate)
+        #expect(scanResult.oldestModifiedDate == olderDate)
+        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
@@ -366,6 +501,37 @@ struct macos_support_toolsTests {
         #expect(item.id == item.url)
         #expect(scanResult.id == .logs)
     }
+}
+
+private func makeMouseDevice(
+    id: String = "123-456-location-789",
+    name: String = "Test Mouse",
+    vendorID: Int = 123,
+    productID: Int = 456,
+    naturalScrollEnabled: Bool = true,
+    leftButtonEnabled: Bool = true,
+    rightButtonEnabled: Bool = true,
+    middleButtonEnabled: Bool = true,
+    button4Enabled: Bool = true,
+    button5Enabled: Bool = true,
+    button4Action: MouseButtonAction = .forward,
+    button5Action: MouseButtonAction = .back
+) -> MouseDevice {
+    MouseDevice(
+        id: id,
+        name: name,
+        vendorID: vendorID,
+        productID: productID,
+        naturalScrollEnabled: naturalScrollEnabled,
+        lastConnected: Date(timeIntervalSince1970: 1_234),
+        leftButtonEnabled: leftButtonEnabled,
+        rightButtonEnabled: rightButtonEnabled,
+        middleButtonEnabled: middleButtonEnabled,
+        button4Enabled: button4Enabled,
+        button5Enabled: button5Enabled,
+        button4Action: button4Action,
+        button5Action: button5Action
+    )
 }
 
 private final class TrashRecorder: @unchecked Sendable {
