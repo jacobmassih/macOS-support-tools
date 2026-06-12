@@ -247,7 +247,7 @@ struct macos_support_toolsTests {
         #expect(!manager.isCleaning)
     }
 
-    @Test @MainActor func cleanupManagerClearAllCachesOnlyCleansUserCaches() async throws {
+    @Test @MainActor func cleanupManagerClearAllCachesRequiresScanAndOnlyCleansUserCaches() async throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -291,6 +291,15 @@ struct macos_support_toolsTests {
             ]
         )
 
+        await manager.clearAllCaches()
+
+        #expect(manager.lastError == "Run a scan before clearing caches.")
+        #expect(manager.lastCleanupResult == nil)
+        #expect(recorder.urls.isEmpty)
+        #expect(fileManager.fileExists(atPath: cacheItemURL.path))
+        #expect(fileManager.fileExists(atPath: tempItemURL.path))
+
+        await manager.scan()
         await manager.clearAllCaches()
 
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
