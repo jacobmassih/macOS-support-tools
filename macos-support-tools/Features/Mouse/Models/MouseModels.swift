@@ -1,6 +1,60 @@
 import Foundation
 import IOKit.hid
 
+struct HIDDeviceDescriptor {
+    let productName: String?
+    let primaryUsagePage: Int
+    let primaryUsage: Int
+    let isBuiltIn: Bool
+}
+
+enum HIDDeviceClassifier {
+    static func isExternalMouseCandidate(_ descriptor: HIDDeviceDescriptor) -> Bool {
+        guard !descriptor.isBuiltIn else {
+            return false
+        }
+
+        if isKeyboardUsage(descriptor) || hasKeyboardProductName(descriptor.productName) {
+            return false
+        }
+
+        if descriptor.primaryUsagePage == kHIDPage_GenericDesktop {
+            return descriptor.primaryUsage == kHIDUsage_GD_Mouse
+                || descriptor.primaryUsage == kHIDUsage_GD_Pointer
+        }
+
+        return hasMouseProductName(descriptor.productName)
+    }
+
+    private static func isKeyboardUsage(_ descriptor: HIDDeviceDescriptor) -> Bool {
+        descriptor.primaryUsagePage == kHIDPage_GenericDesktop
+            && (
+                descriptor.primaryUsage == kHIDUsage_GD_Keyboard
+                    || descriptor.primaryUsage == kHIDUsage_GD_Keypad
+            )
+    }
+
+    private static func hasKeyboardProductName(_ productName: String?) -> Bool {
+        guard let productName else {
+            return false
+        }
+
+        let name = productName.localizedLowercase
+        return name.contains("keyboard")
+    }
+
+    private static func hasMouseProductName(_ productName: String?) -> Bool {
+        guard let productName else {
+            return false
+        }
+
+        let name = productName.localizedLowercase
+        return name.contains("mouse")
+            || name.contains("trackball")
+            || name.contains("pointing")
+    }
+}
+
 // Mouse button actions for side buttons
 enum MouseButtonAction: CaseIterable, Codable, Hashable {
     case none

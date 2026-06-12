@@ -1,8 +1,56 @@
 import Foundation
+import IOKit.hid
 import Testing
 @testable import macos_support_tools
 
 struct macos_support_toolsTests {
+
+    @Test func hidDeviceClassifierRejectsKeyboardDevices() {
+        let keyboardUsage = HIDDeviceDescriptor(
+            productName: "Magic Keyboard",
+            primaryUsagePage: kHIDPage_GenericDesktop,
+            primaryUsage: kHIDUsage_GD_Keyboard,
+            isBuiltIn: false
+        )
+        let keyboardNamedMouseCollection = HIDDeviceDescriptor(
+            productName: "USB Keyboard",
+            primaryUsagePage: kHIDPage_GenericDesktop,
+            primaryUsage: kHIDUsage_GD_Mouse,
+            isBuiltIn: false
+        )
+
+        #expect(!HIDDeviceClassifier.isExternalMouseCandidate(keyboardUsage))
+        #expect(!HIDDeviceClassifier.isExternalMouseCandidate(keyboardNamedMouseCollection))
+    }
+
+    @Test func hidDeviceClassifierAcceptsExternalMouseDevices() {
+        let mouse = HIDDeviceDescriptor(
+            productName: "MX Master 3S",
+            primaryUsagePage: kHIDPage_GenericDesktop,
+            primaryUsage: kHIDUsage_GD_Mouse,
+            isBuiltIn: false
+        )
+        let pointer = HIDDeviceDescriptor(
+            productName: "External Pointing Device",
+            primaryUsagePage: kHIDPage_GenericDesktop,
+            primaryUsage: kHIDUsage_GD_Pointer,
+            isBuiltIn: false
+        )
+
+        #expect(HIDDeviceClassifier.isExternalMouseCandidate(mouse))
+        #expect(HIDDeviceClassifier.isExternalMouseCandidate(pointer))
+    }
+
+    @Test func hidDeviceClassifierRejectsBuiltInDevices() {
+        let builtInMouse = HIDDeviceDescriptor(
+            productName: "Apple Internal Mouse",
+            primaryUsagePage: kHIDPage_GenericDesktop,
+            primaryUsage: kHIDUsage_GD_Mouse,
+            isBuiltIn: true
+        )
+
+        #expect(!HIDDeviceClassifier.isExternalMouseCandidate(builtInMouse))
+    }
 
     @Test func cleanupScanIncludesPackageDescendantSizes() throws {
         let fileManager = FileManager.default

@@ -150,7 +150,7 @@ import Observation
     }
 
     internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
-        guard !ioDevice.isBuiltInDevice else {
+        guard HIDDeviceClassifier.isExternalMouseCandidate(ioDevice.deviceDescriptor) else {
             return nil
         }
 
