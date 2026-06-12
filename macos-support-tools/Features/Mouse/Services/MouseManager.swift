@@ -77,7 +77,7 @@ import Observation
             return
         }
 
-        refreshAccessibilityTrust(prompt: true)
+        refreshAccessibilityTrust()
         deviceMonitor.start()
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
@@ -102,8 +102,9 @@ import Observation
     }
 
     func refreshAccessibilityTrust(prompt: Bool = false) {
+        let shouldPrompt = prompt && !AXIsProcessTrusted()
         let options = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: shouldPrompt
         ] as CFDictionary
 
         accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
