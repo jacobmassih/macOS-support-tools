@@ -184,8 +184,9 @@ import Observation
             return
         }
 
-        connectedDevices.append(device)
-        deviceSettings[device.id] = device
+        let restoredDevice = restoredDeviceSettings(for: device)
+        connectedDevices.append(restoredDevice)
+        deviceSettings[device.id] = restoredDevice
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
@@ -198,7 +199,7 @@ import Observation
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
-        connectedDevices = uniqueDevices(devices)
+        connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
 
@@ -239,6 +240,10 @@ import Observation
         return devices.filter { device in
             seenIDs.insert(device.id).inserted
         }
+    }
+
+    private func restoredDeviceSettings(for device: MouseDevice) -> MouseDevice {
+        deviceSettings[device.id] ?? device
     }
 
     private func loadDeviceSettings() {
