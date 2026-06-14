@@ -28,6 +28,23 @@ extension IOHIDDevice {
         IOHIDDeviceGetProperty(self, kIOHIDProductKey as CFString) as? String
     }
 
+    var primaryUsagePage: Int {
+        intProperty(kIOHIDPrimaryUsagePageKey as CFString)
+    }
+
+    var primaryUsage: Int {
+        intProperty(kIOHIDPrimaryUsageKey as CFString)
+    }
+
+    var deviceDescriptor: HIDDeviceDescriptor {
+        HIDDeviceDescriptor(
+            productName: productString,
+            primaryUsagePage: primaryUsagePage,
+            primaryUsage: primaryUsage,
+            isBuiltIn: isBuiltInDevice
+        )
+    }
+
     var isBuiltInDevice: Bool {
         boolProperty("Built-In" as CFString) || boolProperty("MT Built-In" as CFString)
     }
