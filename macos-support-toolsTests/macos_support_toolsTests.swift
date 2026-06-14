@@ -433,6 +433,41 @@ struct macos_support_toolsTests {
         #expect(!reloadedManager.mouseButtonsEnabled)
     }
 
+    @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {
+        let suiteName = "MouseManagerDetectedDeviceSettingsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let persistedDevice = makeMouseDevice(
+            naturalScrollEnabled: false,
+            leftButtonEnabled: false,
+            rightButtonEnabled: false,
+            middleButtonEnabled: false,
+            button4Enabled: false,
+            button5Enabled: false,
+            button4Action: .middleClick,
+            button5Action: .none
+        )
+        let store = MouseDeviceStore(userDefaults: userDefaults)
+        store.save([persistedDevice.id: persistedDevice])
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        manager.setDetectedDevices([makeMouseDevice()])
+
+        let detectedDevice = try #require(manager.connectedDevices.first)
+        #expect(detectedDevice.id == persistedDevice.id)
+        #expect(!detectedDevice.naturalScrollEnabled)
+        #expect(!detectedDevice.leftButtonEnabled)
+        #expect(!detectedDevice.rightButtonEnabled)
+        #expect(!detectedDevice.middleButtonEnabled)
+        #expect(!detectedDevice.button4Enabled)
+        #expect(!detectedDevice.button5Enabled)
+        #expect(detectedDevice.button4Action == .middleClick)
+        #expect(detectedDevice.button5Action == .none)
+    }
+
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
         let moved = CleanupItem(url: URL(filePath: "/tmp/moved"), size: 10, modifiedDate: nil)
         let skipped = CleanupItem(url: URL(filePath: "/tmp/skipped"), size: 20, modifiedDate: nil)
