@@ -12,7 +12,6 @@ struct MenuBarManager: View {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
             Toggle("Block Keyboard", isOn: $mouseManager.keyboardBlocked)
-            Toggle("Citrix Compatibility", isOn: $mouseManager.citrixPassthroughEnabled)
 
             Divider().padding(.vertical, 2)
 
