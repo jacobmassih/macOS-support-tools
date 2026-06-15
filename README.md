@@ -30,6 +30,19 @@ That permission is necessary for features like scroll-direction changes and side
 
 Because this is a privileged capability, you should review the source and only grant Accessibility access if you are comfortable with how the app works.
 
+## Install With Homebrew
+
+```bash
+brew tap jacobmassih/tap
+brew install --cask macos-support-tools
+```
+
+The Homebrew cask installs the unsigned GitHub release build. On first launch,
+macOS may require opening the app from Finder with **Control-click > Open** or
+approving it in **System Settings > Privacy & Security**.
+
+The app also requires Accessibility permission for mouse event handling.
+
 ## Building
 
 ### Requirements
@@ -84,7 +97,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The release workflow builds the app in Release configuration, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are the values a future Homebrew cask will use.
+The release workflow builds the app in Release configuration, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are used by the Homebrew cask in [`jacobmassih/homebrew-tap`](https://github.com/jacobmassih/homebrew-tap).
 
 Release builds are currently unsigned and not notarized. On first launch, macOS may require opening the app from Finder with **Control-click > Open** to approve running it.
 
