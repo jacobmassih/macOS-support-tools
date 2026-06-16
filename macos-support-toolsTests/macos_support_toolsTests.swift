@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import IOKit.hid
 import Testing
 @testable import macos_support_tools
@@ -436,6 +437,45 @@ struct macos_support_toolsTests {
         reloadedManager.setDetectedDevices([device])
         #expect(!reloadedManager.naturalScrollEnabled)
         #expect(reloadedManager.shouldReverseScroll())
+    }
+
+    @Test func scrollReversalHandlesPointDeltaOnlyWheelEvents() throws {
+        let suiteName = "MouseScrollPointDeltaTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        manager.setDetectedDevices([makeMouseDevice()])
+        manager.naturalScrollEnabled = false
+
+        let event = try #require(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0))
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: 7)
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: -3)
+
+        #expect(applyScrollReversalIfNeeded(to: event, manager: manager))
+        #expect(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2) == -7)
+        #expect(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1) == 3)
+    }
+
+    @Test func scrollReversalSkipsPhaseBasedTrackpadEvents() throws {
+        let suiteName = "MouseScrollPhaseTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        manager.setDetectedDevices([makeMouseDevice()])
+        manager.naturalScrollEnabled = false
+
+        let event = try #require(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0))
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: 7)
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 1)
+
+        #expect(!applyScrollReversalIfNeeded(to: event, manager: manager))
+        #expect(event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2) == 7)
     }
 
     @Test func mouseManagerButtonSettingsAndActionsPersistPerDevice() throws {
