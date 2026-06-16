@@ -38,9 +38,7 @@ brew tap jacobmassih/tap
 brew install --cask macos-support-tools
 ```
 
-The Homebrew cask installs the ad-hoc signed GitHub release build. On first launch,
-macOS may require opening the app from Finder with **Control-click > Open** or
-approving it in **System Settings > Privacy & Security**.
+The Homebrew cask installs the signed and notarized GitHub release build.
 
 The app also requires Accessibility and Input Monitoring permissions for mouse event handling.
 
@@ -62,7 +60,8 @@ Full builds require the full Xcode app. Command Line Tools alone are not enough 
 ## Notes
 
 - The project is intentionally checked in without personal signing metadata.
-- CI is configured to build without code signing.
+- PR CI is configured to build without code signing.
+- Release CI signs and notarizes distributable app archives.
 - The app is not sandboxed because its input-event behavior depends on macOS APIs that require broader access.
 
 ## Local Signing For Xcode
@@ -98,9 +97,18 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The release workflow builds the app in Release configuration, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are used by the Homebrew cask in [`jacobmassih/homebrew-tap`](https://github.com/jacobmassih/homebrew-tap).
+The release workflow builds the app in Release configuration, signs it with Developer ID, notarizes and staples it, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are used by the Homebrew cask in [`jacobmassih/homebrew-tap`](https://github.com/jacobmassih/homebrew-tap).
 
-Release builds are currently ad-hoc signed and not notarized. On first launch, macOS may require opening the app from Finder with **Control-click > Open** to approve running it. macOS may also require re-granting Accessibility and Input Monitoring permissions after updates.
+Release automation requires these repository secrets:
+
+- `HOMEBREW_TAP_TOKEN`: GitHub token with write access to `jacobmassih/homebrew-tap`
+- `DEVELOPER_ID_CERTIFICATE_BASE64`: base64-encoded `.p12` export of the Developer ID Application certificate
+- `DEVELOPER_ID_CERTIFICATE_PASSWORD`: password for the `.p12` certificate export
+- `APPLE_ID`: Apple ID used for notarization
+- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for that Apple ID
+- `APPLE_TEAM_ID`: Apple Developer Team ID
+
+The app requires Accessibility and Input Monitoring permissions after install. Signed releases keep a stable Developer ID identity across versions, which avoids the permission churn caused by ad-hoc-signed builds.
 
 ## License
 
