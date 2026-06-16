@@ -110,6 +110,20 @@ Release automation requires these repository secrets:
 
 The app requires Accessibility and Input Monitoring permissions after install. Signed releases keep a stable Developer ID identity across versions, which avoids the permission churn caused by ad-hoc-signed builds.
 
+### Preparing Release Signing Secrets
+
+Create or download a **Developer ID Application** certificate from the Apple Developer account, install it in Keychain Access, then export it as a password-protected `.p12` file. Convert that file to base64 before adding it to GitHub Actions:
+
+```bash
+base64 -i DeveloperIDApplication.p12 -o DeveloperIDApplication.p12.base64
+```
+
+Use the file contents as `DEVELOPER_ID_CERTIFICATE_BASE64`, and use the `.p12` export password as `DEVELOPER_ID_CERTIFICATE_PASSWORD`.
+
+For notarization, create an app-specific password for the Apple ID used by the developer account. Add that Apple ID as `APPLE_ID`, the app-specific password as `APPLE_APP_SPECIFIC_PASSWORD`, and the Apple Developer Team ID as `APPLE_TEAM_ID`.
+
+After the secrets are added, trigger a release with a version tag or the release workflow dispatch. The workflow fails early if any required release secret is missing or if the imported certificate is not a Developer ID Application signing identity.
+
 ## License
 
 This project is released under the MIT License. See [`LICENSE`](LICENSE).
