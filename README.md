@@ -26,9 +26,10 @@ This repository does not include:
 ## Permissions
 
 The app requires macOS Accessibility permission in order to monitor and adjust input events.
-That permission is necessary for features like scroll-direction changes and side-button remapping.
+It also requires Input Monitoring permission to detect connected mouse devices through `IOHIDManager`.
+Those permissions are necessary for features like scroll-direction changes and side-button remapping.
 
-Because this is a privileged capability, you should review the source and only grant Accessibility access if you are comfortable with how the app works.
+Because these are privileged capabilities, you should review the source and only grant access if you are comfortable with how the app works.
 
 ## Install With Homebrew
 
@@ -37,11 +38,11 @@ brew tap jacobmassih/tap
 brew install --cask macos-support-tools
 ```
 
-The Homebrew cask installs the unsigned GitHub release build. On first launch,
+The Homebrew cask installs the ad-hoc signed GitHub release build. On first launch,
 macOS may require opening the app from Finder with **Control-click > Open** or
 approving it in **System Settings > Privacy & Security**.
 
-The app also requires Accessibility permission for mouse event handling.
+The app also requires Accessibility and Input Monitoring permissions for mouse event handling.
 
 ## Building
 
@@ -99,7 +100,7 @@ git push origin v1.0.0
 
 The release workflow builds the app in Release configuration, packages `macos-support-tools.app` as a zip archive, and uploads a SHA-256 checksum file alongside it. The zip URL and checksum are used by the Homebrew cask in [`jacobmassih/homebrew-tap`](https://github.com/jacobmassih/homebrew-tap).
 
-Release builds are currently unsigned and not notarized. On first launch, macOS may require opening the app from Finder with **Control-click > Open** to approve running it.
+Release builds are currently ad-hoc signed and not notarized. On first launch, macOS may require opening the app from Finder with **Control-click > Open** to approve running it. macOS may also require re-granting Accessibility and Input Monitoring permissions after updates.
 
 ## License
 

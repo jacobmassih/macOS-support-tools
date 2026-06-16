@@ -72,6 +72,12 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Ad-hoc sign app
+        run: |
+          APP_PATH="${RUNNER_TEMP}/DerivedData/Build/Products/Release/macos-support-tools.app"
+          codesign --force --deep --sign - "${APP_PATH}"
+          codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
       - name: Package app
         run: |
           APP_PATH="${RUNNER_TEMP}/DerivedData/Build/Products/Release/macos-support-tools.app"

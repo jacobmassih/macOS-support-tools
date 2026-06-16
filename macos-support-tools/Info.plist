@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>This app needs accessibility permissions to monitor mouse events and provide support tools.</string>
+	<key>NSInputMonitoringUsageDescription</key>
+	<string>This app needs input monitoring permissions to detect connected mouse devices and apply mouse behavior settings.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2025 macos-support-tools contributors.</string>
 	<key>NSPrincipalClass</key>
