@@ -44,6 +44,15 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_ENV}"
           echo "archive_name=macos-support-tools-${VERSION}-macos.zip" >> "${GITHUB_ENV}"
 
+      - name: Check Homebrew tap token
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "::error::Set HOMEBREW_TAP_TOKEN with write access to jacobmassih/homebrew-tap before releasing."
+            exit 1
+          fi
+
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -84,3 +93,23 @@ jobs:
             --title "${tag}" \
             --target "${GITHUB_SHA}" \
             --generate-notes
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: jacobmassih/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew cask
+        working-directory: homebrew-tap
+        run: |
+          SHA256="$(awk '{print $1}' "${release_dir}/${archive_name}.sha256")"
+
+          VERSION="${version}" SHA256="${SHA256}" ruby -pi -e 'sub(/^  version ".*"$/, %{  version "#{ENV.fetch("VERSION")}"}); sub(/^  sha256 ".*"$/, %{  sha256 "#{ENV.fetch("SHA256")}"})' Casks/macos-support-tools.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/macos-support-tools.rb
+          git commit -m "Update macos-support-tools to ${version}"
+          git push
