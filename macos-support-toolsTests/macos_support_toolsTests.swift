@@ -516,6 +516,35 @@ struct macos_support_toolsTests {
         #expect(detectedDevice.button5Action == .none)
     }
 
+    @Test func mouseManagerKeepsPersistedDeviceSettingsAfterDisconnect() throws {
+        let suiteName = "MouseManagerDisconnectedDeviceSettingsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let device = makeMouseDevice()
+
+        manager.addDevice(device)
+        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
+        manager.removeDisconnectedDevices(currentDeviceIDs: [])
+
+        #expect(manager.connectedDevices.isEmpty)
+
+        manager.addDevice(device)
+
+        let reconnectedDevice = try #require(manager.connectedDevices.first)
+        #expect(!reconnectedDevice.leftButtonEnabled)
+        #expect(reconnectedDevice.button4Action == .middleClick)
+
+        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
+        #expect(!persistedDevice.leftButtonEnabled)
+        #expect(persistedDevice.button4Action == .middleClick)
+    }
+
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
         let moved = CleanupItem(url: URL(filePath: "/tmp/moved"), size: 10, modifiedDate: nil)
         let skipped = CleanupItem(url: URL(filePath: "/tmp/skipped"), size: 20, modifiedDate: nil)

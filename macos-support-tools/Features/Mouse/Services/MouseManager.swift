@@ -193,9 +193,7 @@ import Observation
 
     internal func removeDevice(_ device: MouseDevice) {
         connectedDevices.removeAll { $0.id == device.id }
-        deviceSettings.removeValue(forKey: device.id)
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
-        saveDeviceSettings()
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
