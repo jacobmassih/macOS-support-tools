@@ -14,6 +14,8 @@ struct MenuBarManager: View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
+            Toggle("Key Chatter Filter", isOn: $keyboardManager.keyboardChatterFilterEnabled)
+                .disabled(!accessibilityManager.isAccessibilityEnabled)
             Toggle("Block Keyboard", isOn: $keyboardManager.keyboardBlocked)
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
 
@@ -50,7 +52,7 @@ struct StatusBarManager_Previews: PreviewProvider {
 
         MenuBarManager()
             .environment(accessibilityManager)
-            .environment(KeyboardManager(accessibilityManager: accessibilityManager))
+            .environment(KeyboardManager(accessibilityManager: accessibilityManager, startsSystemServices: false))
             .environment(MouseManager(accessibilityManager: accessibilityManager))
     }
 }

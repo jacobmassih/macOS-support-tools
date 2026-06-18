@@ -20,6 +20,31 @@ struct KeyboardSettingsView: View {
                 isOn: $keyboardManager.keyboardBlocked
             )
             .disabled(!accessibilityManager.isAccessibilityEnabled)
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Key chatter filter",
+                subtitle: "Drop duplicate key presses that arrive within the debounce window.",
+                systemImage: "keyboard.chevron.compact.down",
+                isOn: $keyboardManager.keyboardChatterFilterEnabled
+            )
+            .disabled(!accessibilityManager.isAccessibilityEnabled)
+
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Debounce window") {
+                    Text("\(Int(keyboardManager.keyboardChatterFilterDelayMilliseconds)) ms")
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: $keyboardManager.keyboardChatterFilterDelayMilliseconds,
+                    in: 5...100,
+                    step: 5
+                )
+                .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardChatterFilterEnabled)
+            }
+            .padding(.leading, 42)
         }
 
         if !accessibilityManager.isAccessibilityEnabled {

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import IOKit.hid
 import Testing
 @testable import macos_support_tools
@@ -481,6 +482,79 @@ struct macos_support_toolsTests {
         #expect(!reloadedManager.mouseButtonsEnabled)
     }
 
+    @Test func keyboardChatterFilterSuppressesFastDuplicateKeyDowns() throws {
+        let suiteName = "KeyboardChatterFilterTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardChatterFilterDelayMilliseconds = 45
+
+        let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
+        let bouncedA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000)
+        let laterA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_060_000_000)
+        let fastS = try makeKeyboardEvent(keyCode: 1, timestamp: 1_070_000_000)
+
+        #expect(!shouldSuppressKeyboardChatter(event: firstA, keyboardManager: manager))
+        #expect(shouldSuppressKeyboardChatter(event: bouncedA, keyboardManager: manager))
+        #expect(!shouldSuppressKeyboardChatter(event: laterA, keyboardManager: manager))
+        #expect(!shouldSuppressKeyboardChatter(event: fastS, keyboardManager: manager))
+    }
+
+    @Test func keyboardChatterFilterAllowsSystemKeyRepeatEvents() throws {
+        let suiteName = "KeyboardChatterFilterRepeatTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardChatterFilterDelayMilliseconds = 45
+
+        let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
+        let repeatA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000, isAutorepeat: true)
+
+        #expect(!shouldSuppressKeyboardChatter(event: firstA, keyboardManager: manager))
+        #expect(!shouldSuppressKeyboardChatter(event: repeatA, keyboardManager: manager))
+    }
+
+    @Test func keyboardChatterFilterPersistsEnabledStateAndDebounceWindow() throws {
+        let suiteName = "KeyboardChatterFilterPersistenceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardChatterFilterDelayMilliseconds = 30
+
+        let reloadedManager = makeKeyboardManager(userDefaults: userDefaults)
+
+        #expect(reloadedManager.keyboardChatterFilterEnabled)
+        #expect(reloadedManager.keyboardChatterFilterDelayMilliseconds == 30)
+    }
+
+    @Test func keyboardChatterFilterDebounceWindowIsClamped() throws {
+        let suiteName = "KeyboardChatterFilterClampTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+
+        manager.keyboardChatterFilterDelayMilliseconds = 1
+        #expect(manager.keyboardChatterFilterDelayMilliseconds == 5)
+
+        manager.keyboardChatterFilterDelayMilliseconds = 250
+        #expect(manager.keyboardChatterFilterDelayMilliseconds == 100)
+    }
+
     @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {
         let suiteName = "MouseManagerDetectedDeviceSettingsTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -652,6 +726,25 @@ private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
         accessibilityManager: AccessibilityManager(),
         startsSystemServices: false
     )
+}
+
+private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager {
+    KeyboardManager(
+        userDefaults: userDefaults,
+        accessibilityManager: AccessibilityManager(),
+        startsSystemServices: false
+    )
+}
+
+private func makeKeyboardEvent(
+    keyCode: CGKeyCode,
+    timestamp: CGEventTimestamp,
+    isAutorepeat: Bool = false
+) throws -> CGEvent {
+    let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true))
+    event.timestamp = timestamp
+    event.setIntegerValueField(.keyboardEventAutorepeat, value: isAutorepeat ? 1 : 0)
+    return event
 }
 
 private final class TrashRecorder: @unchecked Sendable {

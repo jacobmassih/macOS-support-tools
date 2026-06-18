@@ -9,8 +9,15 @@ struct macos_support_toolsApp: App {
 
     init() {
         let accessibilityManager = AccessibilityManager()
-        let keyboardManager = KeyboardManager(accessibilityManager: accessibilityManager)
-        let mouseManager = MouseManager(accessibilityManager: accessibilityManager)
+        let startsSystemServices = !ProcessInfo.processInfo.isRunningTests
+        let keyboardManager = KeyboardManager(
+            accessibilityManager: accessibilityManager,
+            startsSystemServices: startsSystemServices
+        )
+        let mouseManager = MouseManager(
+            accessibilityManager: accessibilityManager,
+            startsSystemServices: startsSystemServices
+        )
         accessibilityManager.refresh()
 
         _accessibilityManager = State(initialValue: accessibilityManager)
@@ -33,5 +40,11 @@ struct macos_support_toolsApp: App {
                 .environment(cleanupManager)
         }
         .windowResizability(.contentSize)
+    }
+}
+
+private extension ProcessInfo {
+    var isRunningTests: Bool {
+        environment["XCTestConfigurationFilePath"] != nil
     }
 }

@@ -75,7 +75,7 @@ struct SettingsRootView: View {
 
     SettingsRootView()
         .environment(accessibilityManager)
-        .environment(KeyboardManager(accessibilityManager: accessibilityManager))
+        .environment(KeyboardManager(accessibilityManager: accessibilityManager, startsSystemServices: false))
         .environment(MouseManager(accessibilityManager: accessibilityManager))
         .environment(CleanupManager())
 }

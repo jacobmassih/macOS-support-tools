@@ -3,23 +3,69 @@ import Foundation
 import Observation
 
 @Observable class KeyboardManager {
-    @ObservationIgnored private var isAccessibilityEnabled = false
-    @ObservationIgnored private let accessibilityManager: AccessibilityManager
-    @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
-    @ObservationIgnored private var keyboardEventTap: CFMachPort?
-    @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
+    enum DefaultsKey {
+        static let keyboardChatterFilterEnabled = "KeyboardChatterFilterEnabled"
+        static let keyboardChatterFilterDelayMilliseconds = "KeyboardChatterFilterDelayMilliseconds"
+    }
 
+    var keyboardChatterFilterEnabled = false {
+        didSet {
+            userDefaults.set(keyboardChatterFilterEnabled, forKey: DefaultsKey.keyboardChatterFilterEnabled)
+            updateKeyboardEventTap()
+            resetKeyboardChatterFilter()
+        }
+    }
+    var keyboardChatterFilterDelayMilliseconds = 45.0 {
+        didSet {
+            let clampedDelayMilliseconds = keyboardChatterFilterDelayMilliseconds.clamped(to: 5...100)
+            guard keyboardChatterFilterDelayMilliseconds == clampedDelayMilliseconds else {
+                keyboardChatterFilterDelayMilliseconds = clampedDelayMilliseconds
+                return
+            }
+
+            userDefaults.set(
+                keyboardChatterFilterDelayMilliseconds,
+                forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
+            )
+            resetKeyboardChatterFilter()
+        }
+    }
     var keyboardBlocked = false {
         didSet {
             updateKeyboardEventTap()
         }
     }
 
-    init(accessibilityManager: AccessibilityManager) {
+    private let userDefaults: UserDefaults
+    @ObservationIgnored private var isAccessibilityEnabled = false
+    @ObservationIgnored private let accessibilityManager: AccessibilityManager
+    @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
+    @ObservationIgnored private var keyboardChatterFilter = KeyboardChatterFilter()
+    @ObservationIgnored private var keyboardEventTap: CFMachPort?
+    @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        accessibilityManager: AccessibilityManager,
+        startsSystemServices: Bool = true
+    ) {
+        self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
+        self.startsSystemServices = startsSystemServices
         accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
             self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
+
+        userDefaults.register(defaults: [
+            DefaultsKey.keyboardChatterFilterEnabled: false,
+            DefaultsKey.keyboardChatterFilterDelayMilliseconds: 45.0
+        ])
+
+        keyboardChatterFilterEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardChatterFilterEnabled)
+        keyboardChatterFilterDelayMilliseconds = userDefaults.double(
+            forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
+        )
     }
 
     deinit {
@@ -35,7 +81,9 @@ import Observation
     }
 
     private func updateKeyboardEventTap() {
-        if keyboardBlocked && isAccessibilityEnabled {
+        guard startsSystemServices else { return }
+
+        if (keyboardBlocked || keyboardChatterFilterEnabled) && isAccessibilityEnabled {
             setupKeyboardEventTap()
         } else {
             disableKeyboardEventTap()
@@ -83,6 +131,18 @@ import Observation
             self.keyboardRunLoopSource = nil
         }
     }
+
+    internal func shouldSuppressKeyboardChatter(keyCode: Int64, timestamp: CGEventTimestamp) -> Bool {
+        keyboardChatterFilter.shouldSuppressKeyDown(
+            keyCode: keyCode,
+            timestamp: timestamp,
+            debounceNanoseconds: UInt64(keyboardChatterFilterDelayMilliseconds * 1_000_000)
+        )
+    }
+
+    internal func resetKeyboardChatterFilter() {
+        keyboardChatterFilter.reset()
+    }
 }
 
 func keyboardEventCallback(
@@ -101,5 +161,29 @@ func keyboardEventCallback(
         return nil
     }
 
+    if shouldSuppressKeyboardChatter(event: event, keyboardManager: keyboardManager) {
+        return nil
+    }
+
     return Unmanaged.passRetained(event)
+}
+
+@discardableResult
+func shouldSuppressKeyboardChatter(event: CGEvent, keyboardManager: KeyboardManager) -> Bool {
+    guard keyboardManager.keyboardChatterFilterEnabled, event.type == .keyDown else {
+        return false
+    }
+
+    guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
+        return false
+    }
+
+    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    return keyboardManager.shouldSuppressKeyboardChatter(keyCode: keyCode, timestamp: event.timestamp)
+}
+
+extension Comparable {
+    fileprivate func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
+    }
 }

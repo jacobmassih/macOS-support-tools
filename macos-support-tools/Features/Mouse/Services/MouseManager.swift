@@ -255,4 +255,5 @@ import Observation
     private func saveDeviceSettings() {
         deviceStore.save(deviceSettings)
     }
+
 }

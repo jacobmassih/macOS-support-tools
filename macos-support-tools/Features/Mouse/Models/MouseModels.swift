@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import IOKit.hid
 
 struct HIDDeviceDescriptor {
