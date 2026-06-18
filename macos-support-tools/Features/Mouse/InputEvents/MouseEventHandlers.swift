@@ -194,6 +194,24 @@ func keyboardEventCallback(
         // Block the keyboard event by returning nil
         return nil
     }
+
+    if shouldSuppressKeyboardChatter(event: event, manager: manager) {
+        return nil
+    }
     
     return Unmanaged.passRetained(event)
+}
+
+@discardableResult
+func shouldSuppressKeyboardChatter(event: CGEvent, manager: MouseManager) -> Bool {
+    guard manager.keyboardChatterFilterEnabled, event.type == .keyDown else {
+        return false
+    }
+
+    guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
+        return false
+    }
+
+    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    return manager.shouldSuppressKeyboardChatter(keyCode: keyCode, timestamp: event.timestamp)
 }

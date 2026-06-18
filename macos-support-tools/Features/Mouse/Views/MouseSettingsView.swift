@@ -34,6 +34,34 @@ struct MouseSettingsView: View {
                 systemImage: "keyboard.badge.eye",
                 isOn: binding(\.keyboardBlocked)
             )
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Key chatter filter",
+                subtitle: "Drop duplicate key presses that arrive within the debounce window.",
+                systemImage: "keyboard.chevron.compact.down",
+                isOn: binding(\.keyboardChatterFilterEnabled)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Debounce window") {
+                    Text("\(Int(mouseManager.keyboardChatterFilterDelayMilliseconds)) ms")
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: Binding {
+                        mouseManager.keyboardChatterFilterDelayMilliseconds
+                    } set: {
+                        mouseManager.keyboardChatterFilterDelayMilliseconds = $0
+                    },
+                    in: 5...100,
+                    step: 5
+                )
+                .disabled(!mouseManager.keyboardChatterFilterEnabled)
+            }
+            .padding(.leading, 42)
         }
 
         SettingsCard {

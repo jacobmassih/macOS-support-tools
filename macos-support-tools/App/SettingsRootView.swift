@@ -68,6 +68,6 @@ struct SettingsRootView: View {
 
 #Preview {
     SettingsRootView()
-        .environment(MouseManager())
+        .environment(MouseManager(startsSystemServices: false))
         .environment(CleanupManager())
 }

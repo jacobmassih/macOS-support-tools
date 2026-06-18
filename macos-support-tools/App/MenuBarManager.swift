@@ -11,6 +11,7 @@ struct MenuBarManager: View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
+            Toggle("Key Chatter Filter", isOn: $mouseManager.keyboardChatterFilterEnabled)
             Toggle("Block Keyboard", isOn: $mouseManager.keyboardBlocked)
 
             Divider().padding(.vertical, 2)
@@ -43,6 +44,6 @@ struct MenuBarManager: View {
 struct StatusBarManager_Previews: PreviewProvider {
     static var previews: some View {
         MenuBarManager()
-            .environment(MouseManager())
+            .environment(MouseManager(startsSystemServices: false))
     }
 }
