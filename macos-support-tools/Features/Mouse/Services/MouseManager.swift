@@ -9,8 +9,6 @@ import Observation
         static let mouseButtonsEnabled = "MouseButtonsEnabled"
         static let naturalScrollEnabled = "NaturalScrollEnabled"
         static let citrixPassthroughEnabled = "CitrixPassthroughEnabled"
-        static let keyboardChatterFilterEnabled = "KeyboardChatterFilterEnabled"
-        static let keyboardChatterFilterDelayMilliseconds = "KeyboardChatterFilterDelayMilliseconds"
     }
 
     var connectedDevices: [MouseDevice] = []
@@ -34,31 +32,13 @@ import Observation
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
     }
-    var keyboardChatterFilterEnabled = false {
-        didSet {
-            userDefaults.set(keyboardChatterFilterEnabled, forKey: DefaultsKey.keyboardChatterFilterEnabled)
-            updateKeyboardEventTap()
-            resetKeyboardChatterFilter()
-        }
-    }
-    var keyboardChatterFilterDelayMilliseconds = 45.0 {
-        didSet {
-            let clampedDelayMilliseconds = keyboardChatterFilterDelayMilliseconds.clamped(to: 5...100)
-            guard keyboardChatterFilterDelayMilliseconds == clampedDelayMilliseconds else {
-                keyboardChatterFilterDelayMilliseconds = clampedDelayMilliseconds
-                return
-            }
-
-            userDefaults.set(
-                keyboardChatterFilterDelayMilliseconds,
-                forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
-            )
-            resetKeyboardChatterFilter()
-        }
-    }
     var keyboardBlocked = false {
         didSet {
-            updateKeyboardEventTap()
+            if keyboardBlocked {
+                eventTapController.setupKeyboardEventTap()
+            } else {
+                eventTapController.disableKeyboardEventTap()
+            }
         }
     }
 
@@ -66,7 +46,6 @@ import Observation
 
     private let userDefaults: UserDefaults
     private let deviceStore: MouseDeviceStore
-    @ObservationIgnored private var keyboardChatterFilter = KeyboardChatterFilter()
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
 
@@ -83,9 +62,7 @@ import Observation
         userDefaults.register(defaults: [
             DefaultsKey.mouseButtonsEnabled: true,
             DefaultsKey.naturalScrollEnabled: true,
-            DefaultsKey.citrixPassthroughEnabled: true,
-            DefaultsKey.keyboardChatterFilterEnabled: false,
-            DefaultsKey.keyboardChatterFilterDelayMilliseconds: 45.0
+            DefaultsKey.citrixPassthroughEnabled: true
         ])
 
         print("[MouseManager] Initialized and starting up.")
@@ -94,10 +71,6 @@ import Observation
         naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
         mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
         citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
-        keyboardChatterFilterEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardChatterFilterEnabled)
-        keyboardChatterFilterDelayMilliseconds = userDefaults.double(
-            forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
-        )
 
         guard startsSystemServices else {
             updateTapStatus()
@@ -140,7 +113,9 @@ import Observation
         if accessibilityTrusted {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
-            updateKeyboardEventTap()
+            if keyboardBlocked {
+                eventTapController.setupKeyboardEventTap()
+            }
         }
     }
 
@@ -242,18 +217,6 @@ import Observation
         isAnyExternalMouseConnected && !naturalScrollEnabled
     }
 
-    internal func shouldSuppressKeyboardChatter(keyCode: Int64, timestamp: CGEventTimestamp) -> Bool {
-        keyboardChatterFilter.shouldSuppressKeyDown(
-            keyCode: keyCode,
-            timestamp: timestamp,
-            debounceNanoseconds: UInt64(keyboardChatterFilterDelayMilliseconds * 1_000_000)
-        )
-    }
-
-    internal func resetKeyboardChatterFilter() {
-        keyboardChatterFilter.reset()
-    }
-
     internal func updateTapStatus() {
         if !accessibilityTrusted {
             tapStatus = "Inactive - Accessibility permission required"
@@ -297,19 +260,5 @@ import Observation
 
     private func saveDeviceSettings() {
         deviceStore.save(deviceSettings)
-    }
-
-    private func updateKeyboardEventTap() {
-        if keyboardBlocked || keyboardChatterFilterEnabled {
-            eventTapController.setupKeyboardEventTap()
-        } else {
-            eventTapController.disableKeyboardEventTap()
-        }
-    }
-}
-
-extension Comparable {
-    fileprivate func clamped(to range: ClosedRange<Self>) -> Self {
-        min(max(self, range.lowerBound), range.upperBound)
     }
 }
