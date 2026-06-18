@@ -34,24 +34,15 @@ import Observation
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
     }
-    var keyboardBlocked = false {
-        didSet {
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            } else {
-                eventTapController.disableKeyboardEventTap()
-            }
-        }
-    }
-
     let citrixMonitor = CitrixMonitor()
 
     private let userDefaults: UserDefaults
     private let deviceStore: MouseDeviceStore
     @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
     @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored var accessibilityTrustDidChange: ((Bool) -> Void)?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
-    @ObservationIgnored private var eventTapController: MouseEventTapController!
+    @ObservationIgnored var eventTapController: MouseEventTapController!
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -98,7 +89,6 @@ import Observation
         accessibilityTrustManager.clearTrustChangeHandler()
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        eventTapController.disableKeyboardEventTap()
         deviceMonitor.stopPolling()
         deviceMonitor.stop()
     }
@@ -112,14 +102,12 @@ import Observation
     }
 
     private func handleAccessibilityTrustDidChange() {
+        accessibilityTrustDidChange?(accessibilityTrusted)
         updateTapStatus()
 
         if startsSystemServices && accessibilityTrusted {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            }
         }
     }
 

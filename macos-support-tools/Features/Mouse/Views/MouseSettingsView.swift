@@ -7,7 +7,7 @@ struct MouseSettingsView: View {
     var body: some View {
         SettingsHeader(
             title: "Mouse",
-            subtitle: "Tune global mouse behavior and temporary input controls."
+            subtitle: "Tune global mouse behavior."
         )
 
         SettingsCard {
@@ -27,14 +27,6 @@ struct MouseSettingsView: View {
                 isOn: binding(\.mouseButtonsEnabled)
             )
 
-            Divider()
-
-            SettingToggleRow(
-                title: "Block keyboard",
-                subtitle: "Temporarily suppress keyboard input while the app is running.",
-                systemImage: "keyboard.badge.eye",
-                isOn: binding(\.keyboardBlocked)
-            )
         }
 
         SettingsCard {

@@ -3,6 +3,7 @@ import SwiftUI
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case mouse = "Mouse"
+    case keyboard = "Keyboard"
     case cleanup = "Disk Cleanup"
     case citrix = "Citrix"
     case devices = "Devices"
@@ -14,6 +15,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "gauge.with.dots.needle.67percent"
         case .mouse: return "computermouse"
+        case .keyboard: return "keyboard"
         case .cleanup: return "sparkle.magnifyingglass"
         case .citrix: return "rectangle.connected.to.line.below"
         case .devices: return "rectangle.stack.badge.plus"
@@ -23,11 +25,14 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 }
 
 struct SettingsRootView: View {
+    @Environment(KeyboardManager.self) private var keyboardManager
     @Environment(MouseManager.self) private var mouseManager
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var selectedSection: SettingsSection? = .overview
 
     var body: some View {
+        @Bindable var keyboardManager = keyboardManager
+
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selectedSection) { section in
                 Label(section.rawValue, systemImage: section.systemImage)
@@ -42,6 +47,8 @@ struct SettingsRootView: View {
                         OverviewSettingsView(launchAtLogin: launchAtLogin)
                     case .mouse:
                         MouseSettingsView()
+                    case .keyboard:
+                        KeyboardSettingsView(keyboardBlocked: $keyboardManager.keyboardBlocked)
                     case .cleanup:
                         CleanupSettingsView()
                     case .citrix:
@@ -71,6 +78,7 @@ struct SettingsRootView: View {
 
     SettingsRootView()
         .environment(accessibilityTrustManager)
+        .environment(KeyboardManager())
         .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
         .environment(CleanupManager())
 }
