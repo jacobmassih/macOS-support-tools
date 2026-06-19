@@ -23,6 +23,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 }
 
 struct SettingsRootView: View {
+    @Environment(AccessibilityTrustManager.self) private var accessibilityTrustManager
     @Environment(MouseManager.self) private var mouseManager
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var selectedSection: SettingsSection? = .overview
@@ -59,6 +60,7 @@ struct SettingsRootView: View {
             .background(.background)
         }
         .environment(mouseManager)
+        .environment(accessibilityTrustManager)
         .frame(minWidth: 820, minHeight: 560)
         .onAppear {
             launchAtLogin.refresh()
@@ -67,7 +69,10 @@ struct SettingsRootView: View {
 }
 
 #Preview {
+    let accessibilityTrustManager = AccessibilityTrustManager()
+
     SettingsRootView()
-        .environment(MouseManager())
+        .environment(accessibilityTrustManager)
+        .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
         .environment(CleanupManager())
 }

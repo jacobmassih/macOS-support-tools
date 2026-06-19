@@ -14,7 +14,9 @@ import Observation
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
     var isAnyExternalMouseConnected = false
-    var accessibilityTrusted = false
+    var accessibilityTrusted: Bool {
+        accessibilityTrustManager.accessibilityTrusted
+    }
     var aggressiveInversion = false
     var tapStatus = "Inactive"
     var mouseButtonsEnabled = true {
@@ -46,18 +48,28 @@ import Observation
 
     private let userDefaults: UserDefaults
     private let deviceStore: MouseDeviceStore
+    @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
+    @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var accessibilityObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
 
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
+        accessibilityTrustManager: AccessibilityTrustManager? = nil,
         startsSystemServices: Bool = true
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
+        self.accessibilityTrustManager = accessibilityTrustManager
+            ?? AccessibilityTrustManager()
+        self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
+        self.accessibilityObserverID = self.accessibilityTrustManager.addObserver { [weak self] _ in
+            self?.handleAccessibilityTrustDidChange()
+        }
 
         userDefaults.register(defaults: [
             DefaultsKey.mouseButtonsEnabled: true,
@@ -77,7 +89,6 @@ import Observation
             return
         }
 
-        refreshAccessibilityTrust()
         deviceMonitor.start()
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
@@ -86,6 +97,7 @@ import Observation
     }
 
     deinit {
+        accessibilityTrustManager.removeObserver(accessibilityObserverID)
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
         eventTapController.disableKeyboardEventTap()
@@ -101,16 +113,10 @@ import Observation
         mouseButtonsEnabled.toggle()
     }
 
-    func refreshAccessibilityTrust(prompt: Bool = false) {
-        let shouldPrompt = prompt && !AXIsProcessTrusted()
-        let options = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: shouldPrompt
-        ] as CFDictionary
-
-        accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
+    private func handleAccessibilityTrustDidChange() {
         updateTapStatus()
 
-        if accessibilityTrusted {
+        if startsSystemServices && accessibilityTrusted {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
             if keyboardBlocked {
