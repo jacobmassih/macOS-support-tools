@@ -10,7 +10,26 @@ import Observation
         }
     }
 
-    @ObservationIgnored private var trustChangeHandler: ((Bool) -> Void)?
+    @ObservationIgnored private var trustChangeHandlers: [UUID: (Bool) -> Void] = [:]
+    @ObservationIgnored private let notificationCenter: NotificationCenter
+    @ObservationIgnored private var appActivationObserver: NSObjectProtocol?
+
+    init(notificationCenter: NotificationCenter = .default) {
+        self.notificationCenter = notificationCenter
+        appActivationObserver = notificationCenter.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refresh()
+        }
+    }
+
+    deinit {
+        if let appActivationObserver {
+            notificationCenter.removeObserver(appActivationObserver)
+        }
+    }
 
     func refresh(prompt: Bool = false) {
         let shouldPrompt = prompt && !AXIsProcessTrusted()
@@ -21,16 +40,20 @@ import Observation
         accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
     }
 
-    func setTrustChangeHandler(_ handler: @escaping (Bool) -> Void) {
-        trustChangeHandler = handler
+    func addTrustChangeHandler(_ handler: @escaping (Bool) -> Void) -> UUID {
+        let id = UUID()
+        trustChangeHandlers[id] = handler
         handler(accessibilityTrusted)
+        return id
     }
 
-    func clearTrustChangeHandler() {
-        trustChangeHandler = nil
+    func removeTrustChangeHandler(_ id: UUID) {
+        trustChangeHandlers[id] = nil
     }
 
     private func notifyTrustChange() {
-        trustChangeHandler?(accessibilityTrusted)
+        for handler in trustChangeHandlers.values {
+            handler(accessibilityTrusted)
+        }
     }
 }

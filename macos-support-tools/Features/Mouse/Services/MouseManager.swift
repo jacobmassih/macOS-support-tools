@@ -34,15 +34,6 @@ import Observation
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
     }
-    var keyboardBlocked = false {
-        didSet {
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            } else {
-                eventTapController.disableKeyboardEventTap()
-            }
-        }
-    }
 
     let citrixMonitor = CitrixMonitor()
 
@@ -50,6 +41,7 @@ import Observation
     private let deviceStore: MouseDeviceStore
     @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
     @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var accessibilityTrustObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
 
@@ -65,7 +57,7 @@ import Observation
         self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityTrustManager.setTrustChangeHandler { [weak self] _ in
+        self.accessibilityTrustObserverID = self.accessibilityTrustManager.addTrustChangeHandler { [weak self] _ in
             self?.handleAccessibilityTrustDidChange()
         }
 
@@ -95,10 +87,11 @@ import Observation
     }
 
     deinit {
-        accessibilityTrustManager.clearTrustChangeHandler()
+        if let accessibilityTrustObserverID {
+            accessibilityTrustManager.removeTrustChangeHandler(accessibilityTrustObserverID)
+        }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        eventTapController.disableKeyboardEventTap()
         deviceMonitor.stopPolling()
         deviceMonitor.stop()
     }
@@ -117,9 +110,6 @@ import Observation
         if startsSystemServices && accessibilityTrusted {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            }
         }
     }
 
