@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MouseSettingsView: View {
+    @Environment(AccessibilityTrustManager.self) private var accessibilityTrustManager
     @Environment(MouseManager.self) private var mouseManager
 
     var body: some View {
@@ -49,11 +50,11 @@ struct MouseSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !mouseManager.accessibilityTrusted {
+            if !accessibilityTrustManager.accessibilityTrusted {
                 Divider()
 
                 Button {
-                    mouseManager.refreshAccessibilityTrust(prompt: true)
+                    accessibilityTrustManager.refresh(prompt: true)
                 } label: {
                     Label("Request Accessibility Access", systemImage: "lock.open")
                 }

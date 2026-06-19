@@ -67,7 +67,10 @@ struct SettingsRootView: View {
 }
 
 #Preview {
+    let accessibilityTrustManager = AccessibilityTrustManager()
+
     SettingsRootView()
-        .environment(MouseManager())
+        .environment(accessibilityTrustManager)
+        .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
         .environment(CleanupManager())
 }

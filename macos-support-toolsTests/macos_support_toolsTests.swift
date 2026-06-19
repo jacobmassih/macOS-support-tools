@@ -418,7 +418,7 @@ struct macos_support_toolsTests {
             userDefaults.removePersistentDomain(forName: suiteName)
         }
 
-        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let manager = makeMouseManager(userDefaults: userDefaults)
         let device = makeMouseDevice()
 
         #expect(manager.naturalScrollEnabled)
@@ -432,7 +432,7 @@ struct macos_support_toolsTests {
         #expect(manager.shouldReverseScroll())
         #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
 
-        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         reloadedManager.setDetectedDevices([device])
         #expect(!reloadedManager.naturalScrollEnabled)
         #expect(reloadedManager.shouldReverseScroll())
@@ -445,7 +445,7 @@ struct macos_support_toolsTests {
             userDefaults.removePersistentDomain(forName: suiteName)
         }
 
-        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let manager = makeMouseManager(userDefaults: userDefaults)
         let device = makeMouseDevice()
 
         manager.addDevice(device)
@@ -469,7 +469,7 @@ struct macos_support_toolsTests {
         #expect(!manager.mouseButtonsEnabled)
         #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.mouseButtonsEnabled))
 
-        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let reloadedDevice = try #require(reloadedManager.deviceSettings[device.id])
         #expect(!reloadedDevice.leftButtonEnabled)
         #expect(!reloadedDevice.rightButtonEnabled)
@@ -501,7 +501,7 @@ struct macos_support_toolsTests {
         let store = MouseDeviceStore(userDefaults: userDefaults)
         store.save([persistedDevice.id: persistedDevice])
 
-        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let manager = makeMouseManager(userDefaults: userDefaults)
         manager.setDetectedDevices([makeMouseDevice()])
 
         let detectedDevice = try #require(manager.connectedDevices.first)
@@ -523,7 +523,7 @@ struct macos_support_toolsTests {
             userDefaults.removePersistentDomain(forName: suiteName)
         }
 
-        let manager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let manager = makeMouseManager(userDefaults: userDefaults)
         let device = makeMouseDevice()
 
         manager.addDevice(device)
@@ -539,7 +539,7 @@ struct macos_support_toolsTests {
         #expect(!reconnectedDevice.leftButtonEnabled)
         #expect(reconnectedDevice.button4Action == .middleClick)
 
-        let reloadedManager = MouseManager(userDefaults: userDefaults, startsSystemServices: false)
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
         #expect(!persistedDevice.leftButtonEnabled)
         #expect(persistedDevice.button4Action == .middleClick)
@@ -643,6 +643,14 @@ private func makeMouseDevice(
         button5Enabled: button5Enabled,
         button4Action: button4Action,
         button5Action: button5Action
+    )
+}
+
+private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
+    MouseManager(
+        userDefaults: userDefaults,
+        accessibilityTrustManager: AccessibilityTrustManager(),
+        startsSystemServices: false
     )
 }
 

@@ -42,7 +42,9 @@ struct MenuBarManager: View {
 
 struct StatusBarManager_Previews: PreviewProvider {
     static var previews: some View {
+        let accessibilityTrustManager = AccessibilityTrustManager()
+
         MenuBarManager()
-            .environment(MouseManager())
+            .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
     }
 }
