@@ -57,13 +57,12 @@ import Observation
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
-        accessibilityTrustManager: AccessibilityTrustManager? = nil,
+        accessibilityTrustManager: AccessibilityTrustManager,
         startsSystemServices: Bool = true
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityTrustManager = accessibilityTrustManager
-            ?? AccessibilityTrustManager()
         self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
