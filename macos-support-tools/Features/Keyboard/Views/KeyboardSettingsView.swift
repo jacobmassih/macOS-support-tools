@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct KeyboardSettingsView: View {
-    @Binding var keyboardBlocked: Bool
+    @Environment(KeyboardManager.self) private var keyboardManager
 
     var body: some View {
+        @Bindable var keyboardManager = keyboardManager
+
         SettingsHeader(
             title: "Keyboard",
             subtitle: "Manage global keyboard input controls."
@@ -14,7 +16,7 @@ struct KeyboardSettingsView: View {
                 title: "Block keyboard",
                 subtitle: "Temporarily suppress keyboard input while the app is running.",
                 systemImage: "keyboard.badge.eye",
-                isOn: $keyboardBlocked
+                isOn: $keyboardManager.keyboardBlocked
             )
         }
     }

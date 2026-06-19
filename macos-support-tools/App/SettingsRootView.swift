@@ -25,14 +25,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 }
 
 struct SettingsRootView: View {
-    @Environment(KeyboardManager.self) private var keyboardManager
-    @Environment(MouseManager.self) private var mouseManager
     @State private var launchAtLogin = LaunchAtLogin()
     @State private var selectedSection: SettingsSection? = .overview
 
     var body: some View {
-        @Bindable var keyboardManager = keyboardManager
-
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selectedSection) { section in
                 Label(section.rawValue, systemImage: section.systemImage)
@@ -48,7 +44,7 @@ struct SettingsRootView: View {
                     case .mouse:
                         MouseSettingsView()
                     case .keyboard:
-                        KeyboardSettingsView(keyboardBlocked: $keyboardManager.keyboardBlocked)
+                        KeyboardSettingsView()
                     case .cleanup:
                         CleanupSettingsView()
                     case .citrix:
@@ -65,7 +61,6 @@ struct SettingsRootView: View {
             }
             .background(.background)
         }
-        .environment(mouseManager)
         .frame(minWidth: 820, minHeight: 560)
         .onAppear {
             launchAtLogin.refresh()
