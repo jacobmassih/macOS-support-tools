@@ -9,12 +9,9 @@ struct macos_support_toolsApp: App {
 
     init() {
         let accessibilityTrustManager = AccessibilityTrustManager()
-        let keyboardManager = KeyboardManager()
+        let keyboardManager = KeyboardManager(accessibilityTrustManager: accessibilityTrustManager)
         let mouseManager = MouseManager(accessibilityTrustManager: accessibilityTrustManager)
 
-        _ = accessibilityTrustManager.addTrustChangeHandler { [weak keyboardManager] accessibilityTrusted in
-            keyboardManager?.setAccessibilityTrusted(accessibilityTrusted)
-        }
         accessibilityTrustManager.refresh()
 
         _accessibilityTrustManager = State(initialValue: accessibilityTrustManager)

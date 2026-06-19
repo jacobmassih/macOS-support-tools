@@ -4,6 +4,8 @@ import Observation
 
 @Observable class KeyboardManager {
     @ObservationIgnored private var accessibilityTrusted = false
+    @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
+    @ObservationIgnored private var accessibilityTrustObserverID: UUID?
     @ObservationIgnored private var keyboardEventTap: CFMachPort?
     @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
 
@@ -13,11 +15,21 @@ import Observation
         }
     }
 
+    init(accessibilityTrustManager: AccessibilityTrustManager) {
+        self.accessibilityTrustManager = accessibilityTrustManager
+        self.accessibilityTrustObserverID = accessibilityTrustManager.addTrustChangeHandler { [weak self] accessibilityTrusted in
+            self?.handleAccessibilityTrustDidChange(accessibilityTrusted)
+        }
+    }
+
     deinit {
+        if let accessibilityTrustObserverID {
+            accessibilityTrustManager.removeTrustChangeHandler(accessibilityTrustObserverID)
+        }
         disableKeyboardEventTap()
     }
 
-    func setAccessibilityTrusted(_ accessibilityTrusted: Bool) {
+    private func handleAccessibilityTrustDidChange(_ accessibilityTrusted: Bool) {
         self.accessibilityTrusted = accessibilityTrusted
         updateKeyboardEventTap()
     }

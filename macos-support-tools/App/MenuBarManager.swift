@@ -47,7 +47,7 @@ struct StatusBarManager_Previews: PreviewProvider {
         let accessibilityTrustManager = AccessibilityTrustManager()
 
         MenuBarManager()
-            .environment(KeyboardManager())
+            .environment(KeyboardManager(accessibilityTrustManager: accessibilityTrustManager))
             .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
     }
 }
