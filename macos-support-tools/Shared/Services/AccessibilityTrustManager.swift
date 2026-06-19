@@ -10,7 +10,7 @@ import Observation
         }
     }
 
-    @ObservationIgnored private var trustChangeHandler: ((Bool) -> Void)?
+    @ObservationIgnored private var trustChangeHandlers: [UUID: (Bool) -> Void] = [:]
 
     func refresh(prompt: Bool = false) {
         let shouldPrompt = prompt && !AXIsProcessTrusted()
@@ -21,16 +21,20 @@ import Observation
         accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
     }
 
-    func setTrustChangeHandler(_ handler: @escaping (Bool) -> Void) {
-        trustChangeHandler = handler
+    func addTrustChangeHandler(_ handler: @escaping (Bool) -> Void) -> UUID {
+        let id = UUID()
+        trustChangeHandlers[id] = handler
         handler(accessibilityTrusted)
+        return id
     }
 
-    func clearTrustChangeHandler() {
-        trustChangeHandler = nil
+    func removeTrustChangeHandler(_ id: UUID) {
+        trustChangeHandlers[id] = nil
     }
 
     private func notifyTrustChange() {
-        trustChangeHandler?(accessibilityTrusted)
+        for handler in trustChangeHandlers.values {
+            handler(accessibilityTrusted)
+        }
     }
 }

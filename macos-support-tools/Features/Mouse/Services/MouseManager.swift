@@ -40,7 +40,7 @@ import Observation
     private let deviceStore: MouseDeviceStore
     @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
     @ObservationIgnored private let startsSystemServices: Bool
-    @ObservationIgnored var accessibilityTrustDidChange: ((Bool) -> Void)?
+    @ObservationIgnored private var accessibilityTrustObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored var eventTapController: MouseEventTapController!
 
@@ -56,7 +56,7 @@ import Observation
         self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityTrustManager.setTrustChangeHandler { [weak self] _ in
+        self.accessibilityTrustObserverID = self.accessibilityTrustManager.addTrustChangeHandler { [weak self] _ in
             self?.handleAccessibilityTrustDidChange()
         }
 
@@ -86,7 +86,9 @@ import Observation
     }
 
     deinit {
-        accessibilityTrustManager.clearTrustChangeHandler()
+        if let accessibilityTrustObserverID {
+            accessibilityTrustManager.removeTrustChangeHandler(accessibilityTrustObserverID)
+        }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
         deviceMonitor.stopPolling()
@@ -102,7 +104,6 @@ import Observation
     }
 
     private func handleAccessibilityTrustDidChange() {
-        accessibilityTrustDidChange?(accessibilityTrusted)
         updateTapStatus()
 
         if startsSystemServices && accessibilityTrusted {
