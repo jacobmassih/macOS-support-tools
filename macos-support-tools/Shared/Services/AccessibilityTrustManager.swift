@@ -6,11 +6,11 @@ import Observation
     var accessibilityTrusted = false {
         didSet {
             guard accessibilityTrusted != oldValue else { return }
-            notifyObservers()
+            notifyTrustChange()
         }
     }
 
-    @ObservationIgnored private var observers: [UUID: (Bool) -> Void] = [:]
+    @ObservationIgnored private var trustChangeHandler: ((Bool) -> Void)?
 
     func refresh(prompt: Bool = false) {
         let shouldPrompt = prompt && !AXIsProcessTrusted()
@@ -21,22 +21,16 @@ import Observation
         accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
     }
 
-    @discardableResult
-    func addObserver(_ observer: @escaping (Bool) -> Void) -> UUID {
-        let id = UUID()
-        observers[id] = observer
-        observer(accessibilityTrusted)
-        return id
+    func setTrustChangeHandler(_ handler: @escaping (Bool) -> Void) {
+        trustChangeHandler = handler
+        handler(accessibilityTrusted)
     }
 
-    func removeObserver(_ id: UUID?) {
-        guard let id else { return }
-        observers[id] = nil
+    func clearTrustChangeHandler() {
+        trustChangeHandler = nil
     }
 
-    private func notifyObservers() {
-        for observer in observers.values {
-            observer(accessibilityTrusted)
-        }
+    private func notifyTrustChange() {
+        trustChangeHandler?(accessibilityTrusted)
     }
 }

@@ -50,7 +50,6 @@ import Observation
     private let deviceStore: MouseDeviceStore
     @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
     @ObservationIgnored private let startsSystemServices: Bool
-    @ObservationIgnored private var accessibilityObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
 
@@ -66,7 +65,7 @@ import Observation
         self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityObserverID = self.accessibilityTrustManager.addObserver { [weak self] _ in
+        self.accessibilityTrustManager.setTrustChangeHandler { [weak self] _ in
             self?.handleAccessibilityTrustDidChange()
         }
 
@@ -96,7 +95,7 @@ import Observation
     }
 
     deinit {
-        accessibilityTrustManager.removeObserver(accessibilityObserverID)
+        accessibilityTrustManager.clearTrustChangeHandler()
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
         eventTapController.disableKeyboardEventTap()
