@@ -22,6 +22,7 @@ struct macos_support_toolsApp: App {
     var body: some Scene {
         MenuBarExtra("Support Tools", systemImage: "wrench.and.screwdriver") {
             MenuBarManager()
+                .environment(accessibilityTrustManager)
                 .environment(keyboardManager)
                 .environment(mouseManager)
         }

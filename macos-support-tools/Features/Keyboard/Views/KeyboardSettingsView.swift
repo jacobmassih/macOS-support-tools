@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct KeyboardSettingsView: View {
+    @Environment(AccessibilityTrustManager.self) private var accessibilityTrustManager
     @Environment(KeyboardManager.self) private var keyboardManager
 
     var body: some View {
@@ -18,6 +19,17 @@ struct KeyboardSettingsView: View {
                 systemImage: "keyboard.badge.eye",
                 isOn: $keyboardManager.keyboardBlocked
             )
+            .disabled(!accessibilityTrustManager.accessibilityTrusted)
+        }
+
+        if !accessibilityTrustManager.accessibilityTrusted {
+            SettingsCard {
+                Button {
+                    accessibilityTrustManager.refresh(prompt: true)
+                } label: {
+                    Label("Request Accessibility Access", systemImage: "lock.open")
+                }
+            }
         }
     }
 }

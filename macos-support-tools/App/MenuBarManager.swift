@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuBarManager: View {
+    @Environment(AccessibilityTrustManager.self) var accessibilityTrustManager: AccessibilityTrustManager
     @Environment(KeyboardManager.self) var keyboardManager: KeyboardManager
     @Environment(MouseManager.self) var mouseManager: MouseManager
     @State private var launchAtLogin = LaunchAtLogin()
@@ -14,6 +15,7 @@ struct MenuBarManager: View {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
             Toggle("Block Keyboard", isOn: $keyboardManager.keyboardBlocked)
+                .disabled(!accessibilityTrustManager.accessibilityTrusted)
 
             Divider().padding(.vertical, 2)
 
@@ -47,6 +49,7 @@ struct StatusBarManager_Previews: PreviewProvider {
         let accessibilityTrustManager = AccessibilityTrustManager()
 
         MenuBarManager()
+            .environment(accessibilityTrustManager)
             .environment(KeyboardManager(accessibilityTrustManager: accessibilityTrustManager))
             .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
     }

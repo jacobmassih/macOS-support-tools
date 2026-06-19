@@ -35,7 +35,7 @@ import Observation
     }
 
     private func updateKeyboardEventTap() {
-        if keyboardBlocked {
+        if keyboardBlocked && accessibilityTrusted {
             setupKeyboardEventTap()
         } else {
             disableKeyboardEventTap()
@@ -43,7 +43,6 @@ import Observation
     }
 
     private func setupKeyboardEventTap() {
-        guard accessibilityTrusted else { return }
         guard keyboardEventTap == nil else { return }
 
         let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
