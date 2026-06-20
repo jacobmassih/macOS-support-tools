@@ -71,11 +71,11 @@ struct SettingsRootView: View {
 }
 
 #Preview {
-    let accessibilityTrustManager = AccessibilityTrustManager()
+    let accessibilityManager = AccessibilityManager()
 
     SettingsRootView()
-        .environment(accessibilityTrustManager)
-        .environment(KeyboardManager(accessibilityTrustManager: accessibilityTrustManager))
-        .environment(MouseManager(accessibilityTrustManager: accessibilityTrustManager))
+        .environment(accessibilityManager)
+        .environment(KeyboardManager(accessibilityManager: accessibilityManager))
+        .environment(MouseManager(accessibilityManager: accessibilityManager))
         .environment(CleanupManager())
 }

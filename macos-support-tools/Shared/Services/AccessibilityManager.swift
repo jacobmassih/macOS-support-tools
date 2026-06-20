@@ -2,15 +2,15 @@ import AppKit
 import Foundation
 import Observation
 
-@Observable final class AccessibilityTrustManager {
-    var accessibilityTrusted = false {
+@Observable final class AccessibilityManager {
+    var isAccessibilityEnabled = false {
         didSet {
-            guard accessibilityTrusted != oldValue else { return }
-            notifyTrustChange()
+            guard isAccessibilityEnabled != oldValue else { return }
+            notifyPermissionChange()
         }
     }
 
-    @ObservationIgnored private var trustChangeHandlers: [UUID: (Bool) -> Void] = [:]
+    @ObservationIgnored private var permissionChangeHandlers: [UUID: (Bool) -> Void] = [:]
     @ObservationIgnored private let notificationCenter: NotificationCenter
     @ObservationIgnored private var appActivationObserver: NSObjectProtocol?
 
@@ -37,23 +37,23 @@ import Observation
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: shouldPrompt
         ] as CFDictionary
 
-        accessibilityTrusted = AXIsProcessTrustedWithOptions(options)
+        isAccessibilityEnabled = AXIsProcessTrustedWithOptions(options)
     }
 
-    func addTrustChangeHandler(_ handler: @escaping (Bool) -> Void) -> UUID {
+    func observePermissionChanges(_ handler: @escaping (Bool) -> Void) -> UUID {
         let id = UUID()
-        trustChangeHandlers[id] = handler
-        handler(accessibilityTrusted)
+        permissionChangeHandlers[id] = handler
+        handler(isAccessibilityEnabled)
         return id
     }
 
-    func removeTrustChangeHandler(_ id: UUID) {
-        trustChangeHandlers[id] = nil
+    func removePermissionChangeHandler(_ id: UUID) {
+        permissionChangeHandlers[id] = nil
     }
 
-    private func notifyTrustChange() {
-        for handler in trustChangeHandlers.values {
-            handler(accessibilityTrusted)
+    private func notifyPermissionChange() {
+        for handler in permissionChangeHandlers.values {
+            handler(isAccessibilityEnabled)
         }
     }
 }

@@ -3,9 +3,9 @@ import Foundation
 import Observation
 
 @Observable class KeyboardManager {
-    @ObservationIgnored private var accessibilityTrusted = false
-    @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
-    @ObservationIgnored private var accessibilityTrustObserverID: UUID?
+    @ObservationIgnored private var isAccessibilityEnabled = false
+    @ObservationIgnored private let accessibilityManager: AccessibilityManager
+    @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var keyboardEventTap: CFMachPort?
     @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
 
@@ -15,27 +15,27 @@ import Observation
         }
     }
 
-    init(accessibilityTrustManager: AccessibilityTrustManager) {
-        self.accessibilityTrustManager = accessibilityTrustManager
-        accessibilityTrustObserverID = accessibilityTrustManager.addTrustChangeHandler { [weak self] accessibilityTrusted in
-            self?.handleAccessibilityTrustDidChange(accessibilityTrusted)
+    init(accessibilityManager: AccessibilityManager) {
+        self.accessibilityManager = accessibilityManager
+        accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
+            self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
     }
 
     deinit {
-        if let accessibilityTrustObserverID {
-            accessibilityTrustManager.removeTrustChangeHandler(accessibilityTrustObserverID)
+        if let accessibilityPermissionObserverID {
+            accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
         disableKeyboardEventTap()
     }
 
-    private func handleAccessibilityTrustDidChange(_ accessibilityTrusted: Bool) {
-        self.accessibilityTrusted = accessibilityTrusted
+    private func handleAccessibilityPermissionDidChange(_ isAccessibilityEnabled: Bool) {
+        self.isAccessibilityEnabled = isAccessibilityEnabled
         updateKeyboardEventTap()
     }
 
     private func updateKeyboardEventTap() {
-        if keyboardBlocked && accessibilityTrusted {
+        if keyboardBlocked && isAccessibilityEnabled {
             setupKeyboardEventTap()
         } else {
             disableKeyboardEventTap()

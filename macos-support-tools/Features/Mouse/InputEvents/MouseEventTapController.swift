@@ -17,7 +17,7 @@ final class MouseEventTapController {
     }
 
     func setupScrollEventTap() {
-        guard let manager, manager.accessibilityTrusted else {
+        guard let manager, manager.isAccessibilityEnabled else {
             manager?.updateTapStatus()
             return
         }
@@ -63,7 +63,7 @@ final class MouseEventTapController {
     }
 
     func setupButtonEventTap() {
-        guard let manager, manager.accessibilityTrusted else {
+        guard let manager, manager.isAccessibilityEnabled else {
             manager?.updateTapStatus()
             return
         }
