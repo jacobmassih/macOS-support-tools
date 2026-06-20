@@ -39,7 +39,7 @@ import Observation
     private let userDefaults: UserDefaults
     @ObservationIgnored private var isAccessibilityEnabled = false
     @ObservationIgnored private let accessibilityManager: AccessibilityManager
-    @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var keyboardChatterFilter = KeyboardChatterFilter()
     @ObservationIgnored private var keyboardEventTap: CFMachPort?
@@ -47,12 +47,10 @@ import Observation
 
     init(
         userDefaults: UserDefaults = .standard,
-        accessibilityManager: AccessibilityManager,
-        startsSystemServices: Bool = true
+        accessibilityManager: AccessibilityManager
     ) {
         self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
-        self.startsSystemServices = startsSystemServices
         accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
             self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
@@ -75,13 +73,20 @@ import Observation
         disableKeyboardEventTap()
     }
 
+    func startSystemServices() {
+        guard !hasStartedSystemServices else { return }
+
+        hasStartedSystemServices = true
+        updateKeyboardEventTap()
+    }
+
     private func handleAccessibilityPermissionDidChange(_ isAccessibilityEnabled: Bool) {
         self.isAccessibilityEnabled = isAccessibilityEnabled
         updateKeyboardEventTap()
     }
 
     private func updateKeyboardEventTap() {
-        guard startsSystemServices else { return }
+        guard hasStartedSystemServices else { return }
 
         if (keyboardBlocked || keyboardChatterFilterEnabled) && isAccessibilityEnabled {
             setupKeyboardEventTap()

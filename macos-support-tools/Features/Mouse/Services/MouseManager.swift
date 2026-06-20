@@ -40,7 +40,7 @@ import Observation
     private let userDefaults: UserDefaults
     private let deviceStore: MouseDeviceStore
     @ObservationIgnored private let accessibilityManager: AccessibilityManager
-    @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
@@ -48,13 +48,11 @@ import Observation
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
-        accessibilityManager: AccessibilityManager,
-        startsSystemServices: Bool = true
+        accessibilityManager: AccessibilityManager
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityManager = accessibilityManager
-        self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
         self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
@@ -73,17 +71,7 @@ import Observation
         naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
         mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
         citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
-
-        guard startsSystemServices else {
-            updateTapStatus()
-            return
-        }
-
-        deviceMonitor.start()
-        eventTapController.setupScrollEventTap()
-        eventTapController.setupButtonEventTap()
         updateTapStatus()
-        deviceMonitor.startPolling()
     }
 
     deinit {
@@ -104,10 +92,21 @@ import Observation
         mouseButtonsEnabled.toggle()
     }
 
+    func startSystemServices() {
+        guard !hasStartedSystemServices else { return }
+
+        hasStartedSystemServices = true
+        deviceMonitor.start()
+        eventTapController.setupScrollEventTap()
+        eventTapController.setupButtonEventTap()
+        updateTapStatus()
+        deviceMonitor.startPolling()
+    }
+
     private func handleAccessibilityPermissionDidChange() {
         updateTapStatus()
 
-        if startsSystemServices && isAccessibilityEnabled {
+        if hasStartedSystemServices && isAccessibilityEnabled {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
         }

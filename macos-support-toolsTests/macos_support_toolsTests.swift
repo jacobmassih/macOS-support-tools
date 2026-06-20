@@ -723,16 +723,14 @@ private func makeMouseDevice(
 private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
     MouseManager(
         userDefaults: userDefaults,
-        accessibilityManager: AccessibilityManager(),
-        startsSystemServices: false
+        accessibilityManager: AccessibilityManager()
     )
 }
 
 private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager {
     KeyboardManager(
         userDefaults: userDefaults,
-        accessibilityManager: AccessibilityManager(),
-        startsSystemServices: false
+        accessibilityManager: AccessibilityManager()
     )
 }
 
