@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct MouseSettingsView: View {
-    @Environment(AccessibilityTrustManager.self) private var accessibilityTrustManager
+    @Environment(AccessibilityManager.self) private var accessibilityManager
     @Environment(MouseManager.self) private var mouseManager
 
     var body: some View {
         SettingsHeader(
             title: "Mouse",
-            subtitle: "Tune global mouse behavior and temporary input controls."
+            subtitle: "Tune global mouse behavior."
         )
 
         SettingsCard {
@@ -26,15 +26,6 @@ struct MouseSettingsView: View {
                 systemImage: "button.horizontal",
                 isOn: binding(\.mouseButtonsEnabled)
             )
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Block keyboard",
-                subtitle: "Temporarily suppress keyboard input while the app is running.",
-                systemImage: "keyboard.badge.eye",
-                isOn: binding(\.keyboardBlocked)
-            )
         }
 
         SettingsCard {
@@ -50,11 +41,11 @@ struct MouseSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !accessibilityTrustManager.accessibilityTrusted {
+            if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 
                 Button {
-                    accessibilityTrustManager.refresh(prompt: true)
+                    accessibilityManager.refresh(prompt: true)
                 } label: {
                     Label("Request Accessibility Access", systemImage: "lock.open")
                 }

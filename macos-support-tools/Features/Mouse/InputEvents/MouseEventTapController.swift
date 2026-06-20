@@ -7,8 +7,6 @@ final class MouseEventTapController {
     private var buttonEventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var buttonRunLoopSource: CFRunLoopSource?
-    private var keyboardEventTap: CFMachPort?
-    private var keyboardRunLoopSource: CFRunLoopSource?
 
     var hasRequiredMouseEventTaps: Bool {
         eventTap != nil && buttonEventTap != nil
@@ -19,7 +17,7 @@ final class MouseEventTapController {
     }
 
     func setupScrollEventTap() {
-        guard let manager, manager.accessibilityTrusted else {
+        guard let manager, manager.isAccessibilityEnabled else {
             manager?.updateTapStatus()
             return
         }
@@ -65,7 +63,7 @@ final class MouseEventTapController {
     }
 
     func setupButtonEventTap() {
-        guard let manager, manager.accessibilityTrusted else {
+        guard let manager, manager.isAccessibilityEnabled else {
             manager?.updateTapStatus()
             return
         }
@@ -107,51 +105,6 @@ final class MouseEventTapController {
         if let buttonRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
             self.buttonRunLoopSource = nil
-        }
-    }
-
-    func setupKeyboardEventTap() {
-        guard let manager, manager.accessibilityTrusted else {
-            manager?.updateTapStatus()
-            return
-        }
-
-        guard keyboardEventTap == nil else { return }
-
-        let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(manager).toOpaque())
-
-        keyboardEventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: keyboardEventCallback,
-            userInfo: context
-        )
-
-        guard let keyboardEventTap else {
-            print("Failed to create keyboard event tap. App may need accessibility permissions.")
-            return
-        }
-
-        keyboardRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyboardEventTap, 0)
-        guard let keyboardRunLoopSource else { return }
-
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
-    }
-
-    func disableKeyboardEventTap() {
-        if let keyboardEventTap {
-            CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
-            CFMachPortInvalidate(keyboardEventTap)
-            self.keyboardEventTap = nil
-        }
-
-        if let keyboardRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-            self.keyboardRunLoopSource = nil
         }
     }
 }

@@ -14,8 +14,8 @@ import Observation
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
     var isAnyExternalMouseConnected = false
-    var accessibilityTrusted: Bool {
-        accessibilityTrustManager.accessibilityTrusted
+    var isAccessibilityEnabled: Bool {
+        accessibilityManager.isAccessibilityEnabled
     }
     var aggressiveInversion = false
     var tapStatus = "Inactive"
@@ -34,39 +34,31 @@ import Observation
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
     }
-    var keyboardBlocked = false {
-        didSet {
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            } else {
-                eventTapController.disableKeyboardEventTap()
-            }
-        }
-    }
 
     let citrixMonitor = CitrixMonitor()
 
     private let userDefaults: UserDefaults
     private let deviceStore: MouseDeviceStore
-    @ObservationIgnored private let accessibilityTrustManager: AccessibilityTrustManager
+    @ObservationIgnored private let accessibilityManager: AccessibilityManager
     @ObservationIgnored private let startsSystemServices: Bool
+    @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
     @ObservationIgnored private var eventTapController: MouseEventTapController!
 
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
-        accessibilityTrustManager: AccessibilityTrustManager,
+        accessibilityManager: AccessibilityManager,
         startsSystemServices: Bool = true
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
-        self.accessibilityTrustManager = accessibilityTrustManager
+        self.accessibilityManager = accessibilityManager
         self.startsSystemServices = startsSystemServices
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityTrustManager.setTrustChangeHandler { [weak self] _ in
-            self?.handleAccessibilityTrustDidChange()
+        self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
+            self?.handleAccessibilityPermissionDidChange()
         }
 
         userDefaults.register(defaults: [
@@ -95,10 +87,11 @@ import Observation
     }
 
     deinit {
-        accessibilityTrustManager.clearTrustChangeHandler()
+        if let accessibilityPermissionObserverID {
+            accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
+        }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        eventTapController.disableKeyboardEventTap()
         deviceMonitor.stopPolling()
         deviceMonitor.stop()
     }
@@ -111,15 +104,12 @@ import Observation
         mouseButtonsEnabled.toggle()
     }
 
-    private func handleAccessibilityTrustDidChange() {
+    private func handleAccessibilityPermissionDidChange() {
         updateTapStatus()
 
-        if startsSystemServices && accessibilityTrusted {
+        if startsSystemServices && isAccessibilityEnabled {
             eventTapController.setupScrollEventTap()
             eventTapController.setupButtonEventTap()
-            if keyboardBlocked {
-                eventTapController.setupKeyboardEventTap()
-            }
         }
     }
 
@@ -222,7 +212,7 @@ import Observation
     }
 
     internal func updateTapStatus() {
-        if !accessibilityTrusted {
+        if !isAccessibilityEnabled {
             tapStatus = "Inactive - Accessibility permission required"
         } else if eventTapController.hasRequiredMouseEventTaps {
             tapStatus = "Active"

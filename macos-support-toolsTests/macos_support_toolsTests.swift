@@ -649,7 +649,7 @@ private func makeMouseDevice(
 private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
     MouseManager(
         userDefaults: userDefaults,
-        accessibilityTrustManager: AccessibilityTrustManager(),
+        accessibilityManager: AccessibilityManager(),
         startsSystemServices: false
     )
 }
