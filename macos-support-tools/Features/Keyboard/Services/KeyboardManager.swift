@@ -151,21 +151,9 @@ import Observation
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        return shouldSuppressKeyboardDebounce(
+        return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
             timestamp: event.timestamp,
-            isAutorepeat: isAutorepeat
-        )
-    }
-
-    private func shouldSuppressKeyboardDebounce(
-        keyCode: Int64,
-        timestamp: CGEventTimestamp,
-        isAutorepeat: Bool
-    ) -> Bool {
-        keyboardDebounceFilter.shouldSuppressKeyDown(
-            keyCode: keyCode,
-            timestamp: timestamp,
             isAutorepeat: isAutorepeat,
             debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
         )
