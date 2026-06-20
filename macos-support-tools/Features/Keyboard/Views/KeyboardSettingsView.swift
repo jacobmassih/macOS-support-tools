@@ -33,12 +33,12 @@ struct KeyboardSettingsView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 LabeledContent("Debounce window") {
-                    Text("\(Int(keyboardManager.keyboardChatterFilterDelayMilliseconds)) ms")
+                    Text("\(Int(keyboardManager.keyboardDebounceDelayMilliseconds)) ms")
                         .foregroundStyle(.secondary)
                 }
 
                 Slider(
-                    value: $keyboardManager.keyboardChatterFilterDelayMilliseconds,
+                    value: $keyboardManager.keyboardDebounceDelayMilliseconds,
                     in: 5...100,
                     step: 5
                 )

@@ -491,7 +491,7 @@ struct macos_support_toolsTests {
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
         manager.keyboardDebounceEnabled = true
-        manager.keyboardChatterFilterDelayMilliseconds = 45
+        manager.keyboardDebounceDelayMilliseconds = 45
 
         let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
         let bouncedA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000)
@@ -513,7 +513,7 @@ struct macos_support_toolsTests {
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
         manager.keyboardDebounceEnabled = true
-        manager.keyboardChatterFilterDelayMilliseconds = 45
+        manager.keyboardDebounceDelayMilliseconds = 45
 
         let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
         let repeatA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000, isAutorepeat: true)
@@ -531,12 +531,12 @@ struct macos_support_toolsTests {
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
         manager.keyboardDebounceEnabled = true
-        manager.keyboardChatterFilterDelayMilliseconds = 30
+        manager.keyboardDebounceDelayMilliseconds = 30
 
         let reloadedManager = makeKeyboardManager(userDefaults: userDefaults)
 
         #expect(reloadedManager.keyboardDebounceEnabled)
-        #expect(reloadedManager.keyboardChatterFilterDelayMilliseconds == 30)
+        #expect(reloadedManager.keyboardDebounceDelayMilliseconds == 30)
     }
 
     @Test func keyboardChatterFilterDebounceWindowIsClamped() throws {
@@ -548,11 +548,11 @@ struct macos_support_toolsTests {
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
 
-        manager.keyboardChatterFilterDelayMilliseconds = 1
-        #expect(manager.keyboardChatterFilterDelayMilliseconds == 5)
+        manager.keyboardDebounceDelayMilliseconds = 1
+        #expect(manager.keyboardDebounceDelayMilliseconds == 5)
 
-        manager.keyboardChatterFilterDelayMilliseconds = 250
-        #expect(manager.keyboardChatterFilterDelayMilliseconds == 100)
+        manager.keyboardDebounceDelayMilliseconds = 250
+        #expect(manager.keyboardDebounceDelayMilliseconds == 100)
     }
 
     @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {

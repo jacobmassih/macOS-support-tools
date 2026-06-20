@@ -5,7 +5,11 @@ import Observation
 @Observable class KeyboardManager {
     enum DefaultsKey {
         static let keyboardDebounceEnabled = "KeyboardDebounceEnabled"
-        static let keyboardChatterFilterDelayMilliseconds = "KeyboardChatterFilterDelayMilliseconds"
+        static let keyboardDebounceDelayMilliseconds = "KeyboardDebounceDelayMilliseconds"
+    }
+
+    enum Defaults {
+        static let keyboardDebounceDelayMilliseconds = 45.0
     }
 
     var keyboardDebounceEnabled = false {
@@ -15,17 +19,17 @@ import Observation
             resetKeyboardChatterFilter()
         }
     }
-    var keyboardChatterFilterDelayMilliseconds = 45.0 {
+    var keyboardDebounceDelayMilliseconds = Defaults.keyboardDebounceDelayMilliseconds {
         didSet {
-            let clampedDelayMilliseconds = keyboardChatterFilterDelayMilliseconds.clamped(to: 5...100)
-            guard keyboardChatterFilterDelayMilliseconds == clampedDelayMilliseconds else {
-                keyboardChatterFilterDelayMilliseconds = clampedDelayMilliseconds
+            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds.clamped(to: 5...100)
+            guard keyboardDebounceDelayMilliseconds == clampedDelayMilliseconds else {
+                keyboardDebounceDelayMilliseconds = clampedDelayMilliseconds
                 return
             }
 
             userDefaults.set(
-                keyboardChatterFilterDelayMilliseconds,
-                forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
+                keyboardDebounceDelayMilliseconds,
+                forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
             )
             resetKeyboardChatterFilter()
         }
@@ -57,12 +61,12 @@ import Observation
 
         userDefaults.register(defaults: [
             DefaultsKey.keyboardDebounceEnabled: false,
-            DefaultsKey.keyboardChatterFilterDelayMilliseconds: 45.0
+            DefaultsKey.keyboardDebounceDelayMilliseconds: Defaults.keyboardDebounceDelayMilliseconds
         ])
 
         keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
-        keyboardChatterFilterDelayMilliseconds = userDefaults.double(
-            forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
+        keyboardDebounceDelayMilliseconds = userDefaults.double(
+            forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
         )
     }
 
@@ -141,7 +145,7 @@ import Observation
         keyboardChatterFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
             timestamp: timestamp,
-            debounceNanoseconds: UInt64(keyboardChatterFilterDelayMilliseconds * 1_000_000)
+            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
         )
     }
 
