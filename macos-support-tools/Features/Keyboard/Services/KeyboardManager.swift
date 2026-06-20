@@ -4,13 +4,13 @@ import Observation
 
 @Observable class KeyboardManager {
     enum DefaultsKey {
-        static let keyboardChatterFilterEnabled = "KeyboardChatterFilterEnabled"
+        static let keyboardDebounceEnabled = "KeyboardDebounceEnabled"
         static let keyboardChatterFilterDelayMilliseconds = "KeyboardChatterFilterDelayMilliseconds"
     }
 
-    var keyboardChatterFilterEnabled = false {
+    var keyboardDebounceEnabled = false {
         didSet {
-            userDefaults.set(keyboardChatterFilterEnabled, forKey: DefaultsKey.keyboardChatterFilterEnabled)
+            userDefaults.set(keyboardDebounceEnabled, forKey: DefaultsKey.keyboardDebounceEnabled)
             updateKeyboardEventTap()
             resetKeyboardChatterFilter()
         }
@@ -56,11 +56,11 @@ import Observation
         }
 
         userDefaults.register(defaults: [
-            DefaultsKey.keyboardChatterFilterEnabled: false,
+            DefaultsKey.keyboardDebounceEnabled: false,
             DefaultsKey.keyboardChatterFilterDelayMilliseconds: 45.0
         ])
 
-        keyboardChatterFilterEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardChatterFilterEnabled)
+        keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
         keyboardChatterFilterDelayMilliseconds = userDefaults.double(
             forKey: DefaultsKey.keyboardChatterFilterDelayMilliseconds
         )
@@ -88,7 +88,7 @@ import Observation
     private func updateKeyboardEventTap() {
         guard hasStartedSystemServices else { return }
 
-        if (keyboardBlocked || keyboardChatterFilterEnabled) && isAccessibilityEnabled {
+        if (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled {
             setupKeyboardEventTap()
         } else {
             disableKeyboardEventTap()
@@ -175,7 +175,7 @@ func keyboardEventCallback(
 
 @discardableResult
 func shouldSuppressKeyboardChatter(event: CGEvent, keyboardManager: KeyboardManager) -> Bool {
-    guard keyboardManager.keyboardChatterFilterEnabled, event.type == .keyDown else {
+    guard keyboardManager.keyboardDebounceEnabled, event.type == .keyDown else {
         return false
     }
 

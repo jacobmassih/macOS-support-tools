@@ -14,7 +14,7 @@ struct MenuBarManager: View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
             Toggle("Mouse Buttons", isOn: $mouseManager.mouseButtonsEnabled)
-            Toggle("Key Chatter Filter", isOn: $keyboardManager.keyboardChatterFilterEnabled)
+            Toggle("Keyboard Debounce", isOn: $keyboardManager.keyboardDebounceEnabled)
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
             Toggle("Block Keyboard", isOn: $keyboardManager.keyboardBlocked)
                 .disabled(!accessibilityManager.isAccessibilityEnabled)

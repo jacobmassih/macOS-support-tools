@@ -490,7 +490,7 @@ struct macos_support_toolsTests {
         }
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
-        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardDebounceEnabled = true
         manager.keyboardChatterFilterDelayMilliseconds = 45
 
         let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
@@ -512,7 +512,7 @@ struct macos_support_toolsTests {
         }
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
-        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardDebounceEnabled = true
         manager.keyboardChatterFilterDelayMilliseconds = 45
 
         let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
@@ -530,12 +530,12 @@ struct macos_support_toolsTests {
         }
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
-        manager.keyboardChatterFilterEnabled = true
+        manager.keyboardDebounceEnabled = true
         manager.keyboardChatterFilterDelayMilliseconds = 30
 
         let reloadedManager = makeKeyboardManager(userDefaults: userDefaults)
 
-        #expect(reloadedManager.keyboardChatterFilterEnabled)
+        #expect(reloadedManager.keyboardDebounceEnabled)
         #expect(reloadedManager.keyboardChatterFilterDelayMilliseconds == 30)
     }
 

@@ -24,10 +24,10 @@ struct KeyboardSettingsView: View {
             Divider()
 
             SettingToggleRow(
-                title: "Key chatter filter",
+                title: "Keyboard debounce",
                 subtitle: "Drop duplicate key presses that arrive within the debounce window.",
                 systemImage: "keyboard.chevron.compact.down",
-                isOn: $keyboardManager.keyboardChatterFilterEnabled
+                isOn: $keyboardManager.keyboardDebounceEnabled
             )
             .disabled(!accessibilityManager.isAccessibilityEnabled)
 
@@ -42,7 +42,7 @@ struct KeyboardSettingsView: View {
                     in: 5...100,
                     step: 5
                 )
-                .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardChatterFilterEnabled)
+                .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
             }
             .padding(.leading, 42)
         }
