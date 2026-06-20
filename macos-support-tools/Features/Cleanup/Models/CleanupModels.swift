@@ -39,6 +39,7 @@ struct CleanupItem: Identifiable, Codable {
     let url: URL
     let size: Int64
     let modifiedDate: Date?
+    var isDirectory = false
 }
 
 struct CleanupScanResult: Identifiable, Codable {

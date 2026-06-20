@@ -80,6 +80,7 @@ struct macos_support_toolsTests {
 
         #expect(result.itemCount == 1)
         #expect(result.items.first?.url.resolvingSymlinksInPath() == appBundleURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.isDirectory == true)
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
@@ -110,6 +111,7 @@ struct macos_support_toolsTests {
 
         #expect(result.itemCount == 1)
         #expect(result.items.map { $0.url.resolvingSymlinksInPath() } == [payloadURL.resolvingSymlinksInPath()])
+        #expect(result.items.first?.isDirectory == false)
         #expect(result.totalBytes > 0)
     }
 
@@ -527,8 +529,13 @@ struct macos_support_toolsTests {
         let device = makeMouseDevice()
 
         manager.addDevice(device)
+        manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
         manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
+        manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
+
+        #expect(manager.connectedDevices.map(\.id) == [device.id])
+
         manager.removeDisconnectedDevices(currentDeviceIDs: [])
 
         #expect(manager.connectedDevices.isEmpty)

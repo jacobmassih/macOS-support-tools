@@ -46,11 +46,6 @@ struct CleanupCandidateRow: View {
     }
 
     private var itemSystemImage: String {
-        var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: item.url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            return "folder"
-        }
-
-        return "doc"
+        item.isDirectory ? "folder" : "doc"
     }
 }
