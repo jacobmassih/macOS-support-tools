@@ -42,9 +42,9 @@ struct KeyboardSettingsView: View {
                     in: 5...100,
                     step: 5
                 )
-                .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
             }
             .padding(.leading, 42)
+            .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
         }
 
         if !accessibilityManager.isAccessibilityEnabled {

@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 import IOKit.hid
 import Testing
 @testable import macos_support_tools
@@ -483,43 +482,60 @@ struct macos_support_toolsTests {
     }
 
     @Test func keyboardChatterFilterSuppressesFastDuplicateKeyDowns() throws {
-        let suiteName = "KeyboardChatterFilterTests-\(UUID().uuidString)"
-        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
-        defer {
-            userDefaults.removePersistentDomain(forName: suiteName)
-        }
+        var filter = KeyboardChatterFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
 
-        let manager = makeKeyboardManager(userDefaults: userDefaults)
-        manager.keyboardDebounceEnabled = true
-        manager.keyboardDebounceDelayMilliseconds = 45
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let bouncedAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let fastSWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 1,
+            timestamp: 1_070_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
 
-        let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
-        let bouncedA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000)
-        let laterA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_060_000_000)
-        let fastS = try makeKeyboardEvent(keyCode: 1, timestamp: 1_070_000_000)
-
-        #expect(!shouldSuppressKeyboardChatter(event: firstA, keyboardManager: manager))
-        #expect(shouldSuppressKeyboardChatter(event: bouncedA, keyboardManager: manager))
-        #expect(!shouldSuppressKeyboardChatter(event: laterA, keyboardManager: manager))
-        #expect(!shouldSuppressKeyboardChatter(event: fastS, keyboardManager: manager))
+        #expect(!firstAWasSuppressed)
+        #expect(bouncedAWasSuppressed)
+        #expect(!laterAWasSuppressed)
+        #expect(!fastSWasSuppressed)
     }
 
     @Test func keyboardChatterFilterAllowsSystemKeyRepeatEvents() throws {
-        let suiteName = "KeyboardChatterFilterRepeatTests-\(UUID().uuidString)"
-        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
-        defer {
-            userDefaults.removePersistentDomain(forName: suiteName)
-        }
+        var filter = KeyboardChatterFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
 
-        let manager = makeKeyboardManager(userDefaults: userDefaults)
-        manager.keyboardDebounceEnabled = true
-        manager.keyboardDebounceDelayMilliseconds = 45
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let repeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
 
-        let firstA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_000_000_000)
-        let repeatA = try makeKeyboardEvent(keyCode: 0, timestamp: 1_020_000_000, isAutorepeat: true)
-
-        #expect(!shouldSuppressKeyboardChatter(event: firstA, keyboardManager: manager))
-        #expect(!shouldSuppressKeyboardChatter(event: repeatA, keyboardManager: manager))
+        #expect(!firstAWasSuppressed)
+        #expect(!repeatAWasSuppressed)
+        #expect(!laterAWasSuppressed)
     }
 
     @Test func keyboardChatterFilterPersistsEnabledStateAndDebounceWindow() throws {
@@ -732,17 +748,6 @@ private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager 
         userDefaults: userDefaults,
         accessibilityManager: AccessibilityManager()
     )
-}
-
-private func makeKeyboardEvent(
-    keyCode: CGKeyCode,
-    timestamp: CGEventTimestamp,
-    isAutorepeat: Bool = false
-) throws -> CGEvent {
-    let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true))
-    event.timestamp = timestamp
-    event.setIntegerValueField(.keyboardEventAutorepeat, value: isAutorepeat ? 1 : 0)
-    return event
 }
 
 private final class TrashRecorder: @unchecked Sendable {

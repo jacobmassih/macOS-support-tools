@@ -141,20 +141,43 @@ import Observation
         }
     }
 
-    internal func shouldSuppressKeyboardChatter(keyCode: Int64, timestamp: CGEventTimestamp) -> Bool {
+    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+        if keyboardBlocked {
+            return true
+        }
+
+        guard keyboardDebounceEnabled, type == .keyDown else {
+            return false
+        }
+
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        return shouldSuppressKeyboardChatter(
+            keyCode: keyCode,
+            timestamp: event.timestamp,
+            isAutorepeat: isAutorepeat
+        )
+    }
+
+    private func shouldSuppressKeyboardChatter(
+        keyCode: Int64,
+        timestamp: CGEventTimestamp,
+        isAutorepeat: Bool
+    ) -> Bool {
         keyboardChatterFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
             timestamp: timestamp,
+            isAutorepeat: isAutorepeat,
             debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
         )
     }
 
-    internal func resetKeyboardChatterFilter() {
+    private func resetKeyboardChatterFilter() {
         keyboardChatterFilter.reset()
     }
 }
 
-func keyboardEventCallback(
+private func keyboardEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
@@ -166,29 +189,11 @@ func keyboardEventCallback(
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
 
-    if keyboardManager.keyboardBlocked {
-        return nil
-    }
-
-    if shouldSuppressKeyboardChatter(event: event, keyboardManager: keyboardManager) {
+    if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil
     }
 
     return Unmanaged.passRetained(event)
-}
-
-@discardableResult
-func shouldSuppressKeyboardChatter(event: CGEvent, keyboardManager: KeyboardManager) -> Bool {
-    guard keyboardManager.keyboardDebounceEnabled, event.type == .keyDown else {
-        return false
-    }
-
-    guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else {
-        return false
-    }
-
-    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    return keyboardManager.shouldSuppressKeyboardChatter(keyCode: keyCode, timestamp: event.timestamp)
 }
 
 extension Comparable {

@@ -6,8 +6,13 @@ struct KeyboardChatterFilter {
     mutating func shouldSuppressKeyDown(
         keyCode: Int64,
         timestamp: CGEventTimestamp,
+        isAutorepeat: Bool = false,
         debounceNanoseconds: UInt64
     ) -> Bool {
+        guard !isAutorepeat else {
+            return false
+        }
+
         guard let previousTimestamp = lastKeyDownTimestampByKeyCode[keyCode],
               timestamp >= previousTimestamp else {
             lastKeyDownTimestampByKeyCode[keyCode] = timestamp
