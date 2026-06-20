@@ -16,7 +16,7 @@ import Observation
         didSet {
             userDefaults.set(keyboardDebounceEnabled, forKey: DefaultsKey.keyboardDebounceEnabled)
             updateKeyboardEventTap()
-            resetKeyboardChatterFilter()
+            resetKeyboardDebounceFilter()
         }
     }
     var keyboardDebounceDelayMilliseconds = Defaults.keyboardDebounceDelayMilliseconds {
@@ -31,7 +31,7 @@ import Observation
                 keyboardDebounceDelayMilliseconds,
                 forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
             )
-            resetKeyboardChatterFilter()
+            resetKeyboardDebounceFilter()
         }
     }
     var keyboardBlocked = false {
@@ -45,7 +45,7 @@ import Observation
     @ObservationIgnored private let accessibilityManager: AccessibilityManager
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
-    @ObservationIgnored private var keyboardChatterFilter = KeyboardChatterFilter()
+    @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
     @ObservationIgnored private var keyboardEventTap: CFMachPort?
     @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
 
@@ -152,19 +152,19 @@ import Observation
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        return shouldSuppressKeyboardChatter(
+        return shouldSuppressKeyboardDebounce(
             keyCode: keyCode,
             timestamp: event.timestamp,
             isAutorepeat: isAutorepeat
         )
     }
 
-    private func shouldSuppressKeyboardChatter(
+    private func shouldSuppressKeyboardDebounce(
         keyCode: Int64,
         timestamp: CGEventTimestamp,
         isAutorepeat: Bool
     ) -> Bool {
-        keyboardChatterFilter.shouldSuppressKeyDown(
+        keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
             timestamp: timestamp,
             isAutorepeat: isAutorepeat,
@@ -172,8 +172,8 @@ import Observation
         )
     }
 
-    private func resetKeyboardChatterFilter() {
-        keyboardChatterFilter.reset()
+    private func resetKeyboardDebounceFilter() {
+        keyboardDebounceFilter.reset()
     }
 }
 

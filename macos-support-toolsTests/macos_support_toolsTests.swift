@@ -481,8 +481,8 @@ struct macos_support_toolsTests {
         #expect(!reloadedManager.mouseButtonsEnabled)
     }
 
-    @Test func keyboardChatterFilterSuppressesFastDuplicateKeyDowns() throws {
-        var filter = KeyboardChatterFilter()
+    @Test func keyboardDebounceFilterSuppressesFastDuplicateKeyDowns() throws {
+        var filter = KeyboardDebounceFilter()
         let debounceNanoseconds: UInt64 = 45_000_000
 
         let firstAWasSuppressed = filter.shouldSuppressKeyDown(
@@ -512,8 +512,8 @@ struct macos_support_toolsTests {
         #expect(!fastSWasSuppressed)
     }
 
-    @Test func keyboardChatterFilterAllowsSystemKeyRepeatEvents() throws {
-        var filter = KeyboardChatterFilter()
+    @Test func keyboardDebounceFilterAllowsSystemKeyRepeatEvents() throws {
+        var filter = KeyboardDebounceFilter()
         let debounceNanoseconds: UInt64 = 45_000_000
 
         let firstAWasSuppressed = filter.shouldSuppressKeyDown(
@@ -538,8 +538,8 @@ struct macos_support_toolsTests {
         #expect(!laterAWasSuppressed)
     }
 
-    @Test func keyboardChatterFilterPersistsEnabledStateAndDebounceWindow() throws {
-        let suiteName = "KeyboardChatterFilterPersistenceTests-\(UUID().uuidString)"
+    @Test func keyboardDebounceFilterPersistsEnabledStateAndDebounceWindow() throws {
+        let suiteName = "KeyboardDebounceFilterPersistenceTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
             userDefaults.removePersistentDomain(forName: suiteName)
@@ -555,8 +555,8 @@ struct macos_support_toolsTests {
         #expect(reloadedManager.keyboardDebounceDelayMilliseconds == 30)
     }
 
-    @Test func keyboardChatterFilterDebounceWindowIsClamped() throws {
-        let suiteName = "KeyboardChatterFilterClampTests-\(UUID().uuidString)"
+    @Test func keyboardDebounceFilterDebounceWindowIsClamped() throws {
+        let suiteName = "KeyboardDebounceFilterClampTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
             userDefaults.removePersistentDomain(forName: suiteName)

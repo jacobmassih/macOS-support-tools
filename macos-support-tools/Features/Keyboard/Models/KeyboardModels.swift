@@ -1,6 +1,6 @@
 import CoreGraphics
 
-struct KeyboardChatterFilter {
+struct KeyboardDebounceFilter {
     private var lastKeyDownTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
 
     mutating func shouldSuppressKeyDown(
