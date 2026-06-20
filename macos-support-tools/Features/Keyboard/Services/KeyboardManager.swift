@@ -31,7 +31,6 @@ import Observation
                 keyboardDebounceDelayMilliseconds,
                 forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
             )
-            resetKeyboardDebounceFilter()
         }
     }
     var keyboardBlocked = false {
