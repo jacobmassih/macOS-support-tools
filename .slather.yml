@@ -1,0 +1,9 @@
+coverage_service: cobertura_xml
+xcodeproj: macos-support-tools.xcodeproj
+scheme: macos-support-tools
+configuration: Debug
+source_directory: macos-support-tools
+output_directory: coverage
+ignore:
+  - macos-support-toolsTests/*
+  - macos-support-toolsUITests/*
