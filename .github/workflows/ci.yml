@@ -67,18 +67,14 @@ jobs:
             | xcpretty
       
       - name: Run unit tests
-        env:
-          UNIT_TEST_RESULT_BUNDLE: ${{ runner.temp }}/unit-tests.xcresult
         run: |
           set -o pipefail
-          rm -rf "$UNIT_TEST_RESULT_BUNDLE"
           xcodebuild test \
             -project macos-support-tools.xcodeproj \
             -scheme macos-support-tools \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath "${{ runner.temp }}/DerivedData" \
             -only-testing:macos-support-toolsTests \
-            -resultBundlePath "$UNIT_TEST_RESULT_BUNDLE" \
             -enableCodeCoverage YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -137,6 +133,6 @@ jobs:
         with:
           name: test-results-${{ github.event.pull_request.number }}
           path: |
-            ${{ runner.temp }}/unit-tests.xcresult
+            ${{ runner.temp }}/DerivedData/**/Logs/Test/*.xcresult
           retention-days: 7
           if-no-files-found: ignore
