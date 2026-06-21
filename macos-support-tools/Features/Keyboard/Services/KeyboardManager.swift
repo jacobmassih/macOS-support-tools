@@ -174,7 +174,7 @@ import Observation
 
         guard type == .keyDown else {
             if type == .keyUp {
-                keyboardDebounceFilter.keyDidRelease(keyCode: keyCode)
+                keyboardDebounceFilter.handleKeyUp(keyCode: keyCode)
             }
 
             return false
