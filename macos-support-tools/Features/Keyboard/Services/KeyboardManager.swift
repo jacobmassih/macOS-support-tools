@@ -108,10 +108,10 @@ import Observation
 
     private func keyboardEventMaskForCurrentFeatures() -> CGEventMask {
         var eventMask = (1 << CGEventType.keyDown.rawValue)
-            | (1 << CGEventType.keyUp.rawValue)
 
         if keyboardBlocked {
-            eventMask |= (1 << CGEventType.flagsChanged.rawValue)
+            eventMask |= (1 << CGEventType.keyUp.rawValue)
+                | (1 << CGEventType.flagsChanged.rawValue)
         }
 
         return CGEventMask(eventMask)
@@ -173,10 +173,6 @@ import Observation
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
         guard type == .keyDown else {
-            if type == .keyUp {
-                keyboardDebounceFilter.handleKeyUp(keyCode: keyCode)
-            }
-
             return false
         }
 
