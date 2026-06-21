@@ -3,8 +3,6 @@ import Foundation
 import Observation
 
 @Observable class KeyboardManager {
-    private static let keyboardDebounceDebugLoggingEnabled = true
-
     enum DefaultsKey {
         static let keyboardDebounceEnabled = "KeyboardDebounceEnabled"
         static let keyboardDebounceDelayMilliseconds = "KeyboardDebounceDelayMilliseconds"
@@ -49,6 +47,7 @@ import Observation
     @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
     @ObservationIgnored private var keyboardEventTap: CFMachPort?
     @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
+    @ObservationIgnored private var keyboardEventMask: CGEventMask?
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -93,19 +92,34 @@ import Observation
     private func updateKeyboardEventTap() {
         guard hasStartedSystemServices else { return }
 
-        if (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled {
-            setupKeyboardEventTap()
-        } else {
+        guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {
             disableKeyboardEventTap()
+            return
+        }
+
+        let eventMask = keyboardEventMaskForCurrentFeatures()
+        if keyboardEventTap == nil {
+            setupKeyboardEventTap(eventMask: eventMask)
+        } else if keyboardEventMask != eventMask {
+            disableKeyboardEventTap()
+            setupKeyboardEventTap(eventMask: eventMask)
         }
     }
 
-    private func setupKeyboardEventTap() {
+    private func keyboardEventMaskForCurrentFeatures() -> CGEventMask {
+        var eventMask = (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
+
+        if keyboardBlocked {
+            eventMask |= (1 << CGEventType.flagsChanged.rawValue)
+        }
+
+        return CGEventMask(eventMask)
+    }
+
+    private func setupKeyboardEventTap(eventMask: CGEventMask) {
         guard keyboardEventTap == nil else { return }
 
-        let eventMask = (1 << CGEventType.keyDown.rawValue)
-            | (1 << CGEventType.keyUp.rawValue)
-            | (1 << CGEventType.flagsChanged.rawValue)
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
         keyboardEventTap = CGEvent.tapCreate(
@@ -123,8 +137,12 @@ import Observation
         }
 
         keyboardRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyboardEventTap, 0)
-        guard let keyboardRunLoopSource else { return }
+        guard let keyboardRunLoopSource else {
+            disableKeyboardEventTap()
+            return
+        }
 
+        keyboardEventMask = eventMask
         CFRunLoopAddSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
         CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
     }
@@ -135,6 +153,7 @@ import Observation
             CFMachPortInvalidate(keyboardEventTap)
             self.keyboardEventTap = nil
         }
+        keyboardEventMask = nil
 
         if let keyboardRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
@@ -155,11 +174,7 @@ import Observation
 
         guard type == .keyDown else {
             if type == .keyUp {
-                keyboardDebounceFilter.keyDidRelease(
-                    keyCode: keyCode,
-                    timestamp: event.timestamp,
-                    debugLog: logKeyboardDebounce
-                )
+                keyboardDebounceFilter.keyDidRelease(keyCode: keyCode)
             }
 
             return false
@@ -170,20 +185,12 @@ import Observation
             keyCode: keyCode,
             timestamp: event.timestamp,
             isAutorepeat: isAutorepeat,
-            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000),
-            debugLog: logKeyboardDebounce
+            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
         )
     }
 
     private func resetKeyboardDebounceFilter() {
         keyboardDebounceFilter.reset()
-        logKeyboardDebounce("reset reason=settings-changed")
-    }
-
-    private func logKeyboardDebounce(_ message: String) {
-        guard Self.keyboardDebounceDebugLoggingEnabled else { return }
-
-        print("[KeyboardDebounce] wallTime=\(Date()) \(message)")
     }
 }
 
