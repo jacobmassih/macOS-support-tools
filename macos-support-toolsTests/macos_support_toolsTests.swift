@@ -684,7 +684,7 @@ struct macos_support_toolsTests {
         #expect(manager.keyboardDebounceDelayMilliseconds == 5)
 
         manager.keyboardDebounceDelayMilliseconds = 250
-        #expect(manager.keyboardDebounceDelayMilliseconds == 100)
+        #expect(manager.keyboardDebounceDelayMilliseconds == 200)
     }
 
     @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {

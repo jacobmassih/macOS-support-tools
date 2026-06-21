@@ -21,7 +21,7 @@ import Observation
     }
     var keyboardDebounceDelayMilliseconds = Defaults.keyboardDebounceDelayMilliseconds {
         didSet {
-            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds.clamped(to: 5...100)
+            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds.clamped(to: 5...200)
             guard keyboardDebounceDelayMilliseconds == clampedDelayMilliseconds else {
                 keyboardDebounceDelayMilliseconds = clampedDelayMilliseconds
                 return

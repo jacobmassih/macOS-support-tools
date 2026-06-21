@@ -39,7 +39,7 @@ struct KeyboardSettingsView: View {
 
                 Slider(
                     value: $keyboardManager.keyboardDebounceDelayMilliseconds,
-                    in: 5...100,
+                    in: 5...200,
                     step: 5
                 )
             }
