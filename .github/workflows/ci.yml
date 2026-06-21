@@ -126,7 +126,7 @@ jobs:
         with:
           name: macos-support-tools-build-${{ github.event.pull_request.number }}
           path: |
-            ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Release/*.app
+            ${{ runner.temp }}/DerivedData/Build/Products/Release/*.app
           retention-days: 7
       
       - name: Upload test results
