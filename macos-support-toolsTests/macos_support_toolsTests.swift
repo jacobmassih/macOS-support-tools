@@ -564,7 +564,7 @@ struct macos_support_toolsTests {
         #expect(!firstRepeatAWasSuppressed)
         #expect(!nextRepeatAWasSuppressed)
 
-        filter.keyDidRelease(keyCode: 0)
+        filter.keyDidRelease(keyCode: 0, timestamp: 1_530_000_000)
 
         let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
             keyCode: 0,
@@ -591,7 +591,7 @@ struct macos_support_toolsTests {
             debounceNanoseconds: debounceNanoseconds
         )
 
-        filter.keyDidRelease(keyCode: 0)
+        filter.keyDidRelease(keyCode: 0, timestamp: 1_510_000_000)
 
         let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
             keyCode: 0,

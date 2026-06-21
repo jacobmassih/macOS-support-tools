@@ -3,6 +3,8 @@ import Foundation
 import Observation
 
 @Observable class KeyboardManager {
+    private static let keyboardDebounceDebugLoggingEnabled = true
+
     enum DefaultsKey {
         static let keyboardDebounceEnabled = "KeyboardDebounceEnabled"
         static let keyboardDebounceDelayMilliseconds = "KeyboardDebounceDelayMilliseconds"
@@ -153,7 +155,11 @@ import Observation
 
         guard type == .keyDown else {
             if type == .keyUp {
-                keyboardDebounceFilter.keyDidRelease(keyCode: keyCode)
+                keyboardDebounceFilter.keyDidRelease(
+                    keyCode: keyCode,
+                    timestamp: event.timestamp,
+                    debugLog: logKeyboardDebounce
+                )
             }
 
             return false
@@ -164,12 +170,20 @@ import Observation
             keyCode: keyCode,
             timestamp: event.timestamp,
             isAutorepeat: isAutorepeat,
-            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
+            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000),
+            debugLog: logKeyboardDebounce
         )
     }
 
     private func resetKeyboardDebounceFilter() {
         keyboardDebounceFilter.reset()
+        logKeyboardDebounce("reset reason=settings-changed")
+    }
+
+    private func logKeyboardDebounce(_ message: String) {
+        guard Self.keyboardDebounceDebugLoggingEnabled else { return }
+
+        print("[KeyboardDebounce] wallTime=\(Date()) \(message)")
     }
 }
 
