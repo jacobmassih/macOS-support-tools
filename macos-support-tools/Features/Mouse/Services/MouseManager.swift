@@ -205,8 +205,7 @@ import Observation
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
 
-    internal func removeDisconnectedDevices(currentDeviceIDs: [String]) {
-        let currentDeviceIDs = Set(currentDeviceIDs)
+    internal func removeDisconnectedDevices(currentDeviceIDs: Set<String>) {
         connectedDevices.removeAll { !currentDeviceIDs.contains($0.id) }
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }

@@ -63,7 +63,7 @@ final class HIDMouseDeviceMonitor {
     }
 
     private func checkDeviceConnectionStatus() {
-        let currentDeviceIDs = currentIOHIDDevices().map(\.deviceID)
+        let currentDeviceIDs = Set(currentIOHIDDevices().map(\.deviceID))
         manager?.removeDisconnectedDevices(currentDeviceIDs: currentDeviceIDs)
     }
 
