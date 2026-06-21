@@ -145,11 +145,20 @@ import Observation
             return true
         }
 
-        guard keyboardDebounceEnabled, type == .keyDown else {
+        guard keyboardDebounceEnabled else {
             return false
         }
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+
+        guard type == .keyDown else {
+            if type == .keyUp {
+                keyboardDebounceFilter.keyDidRelease(keyCode: keyCode, timestamp: event.timestamp)
+            }
+
+            return false
+        }
+
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,

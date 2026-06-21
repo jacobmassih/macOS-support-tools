@@ -512,7 +512,7 @@ struct macos_support_toolsTests {
         #expect(!fastSWasSuppressed)
     }
 
-    @Test func keyboardDebounceFilterAllowsSystemKeyRepeatEvents() throws {
+    @Test func keyboardDebounceFilterSuppressesEarlyAutorepeatDuplicates() throws {
         var filter = KeyboardDebounceFilter()
         let debounceNanoseconds: UInt64 = 45_000_000
 
@@ -521,7 +521,7 @@ struct macos_support_toolsTests {
             timestamp: 1_000_000_000,
             debounceNanoseconds: debounceNanoseconds
         )
-        let repeatAWasSuppressed = filter.shouldSuppressKeyDown(
+        let duplicateAWasSuppressed = filter.shouldSuppressKeyDown(
             keyCode: 0,
             timestamp: 1_020_000_000,
             isAutorepeat: true,
@@ -534,7 +534,123 @@ struct macos_support_toolsTests {
         )
 
         #expect(!firstAWasSuppressed)
-        #expect(!repeatAWasSuppressed)
+        #expect(duplicateAWasSuppressed)
+        #expect(!laterAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsHeldKeyRepeatEvents() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let firstRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let nextRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_520_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!firstRepeatAWasSuppressed)
+        #expect(!nextRepeatAWasSuppressed)
+
+        filter.keyDidRelease(keyCode: 0, timestamp: 1_530_000_000)
+
+        let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_600_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!nextPressAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterSuppressesFastDuplicateAfterHeldKeyRelease() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        _ = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        _ = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        filter.keyDidRelease(keyCode: 0, timestamp: 1_510_000_000)
+
+        let bouncedAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_520_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(bouncedAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsDifferentKeysDuringRepeat() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let firstRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let fastSWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 1,
+            timestamp: 1_520_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!firstRepeatAWasSuppressed)
+        #expect(!fastSWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsLaterPressesAfterAutorepeatDuplicate() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let duplicateAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(duplicateAWasSuppressed)
         #expect(!laterAWasSuppressed)
     }
 
