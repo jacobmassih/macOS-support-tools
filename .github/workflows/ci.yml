@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Build and Test on macOS 26
-    runs-on: macos-latest  # Should support macOS 26
+    runs-on: macos-26
     permissions:
       contents: read
     
@@ -47,17 +47,20 @@ jobs:
       
       - name: Install dependencies
         run: |
-          # Install any required dependencies
-          # brew install <dependencies>
-          echo "Installing dependencies..."
+          gem install slather -v 2.8.5 --no-document
+          python3 -m venv "${{ runner.temp }}/diff-cover-venv"
+          "${{ runner.temp }}/diff-cover-venv/bin/python" -m pip install diff-cover
+          echo "${{ runner.temp }}/diff-cover-venv/bin" >> "$GITHUB_PATH"
       
       - name: Build project
         run: |
+          set -o pipefail
           xcodebuild clean build \
             -project macos-support-tools.xcodeproj \
             -scheme macos-support-tools \
             -configuration Release \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "${{ runner.temp }}/DerivedData" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -65,18 +68,40 @@ jobs:
       
       - name: Run unit tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project macos-support-tools.xcodeproj \
             -scheme macos-support-tools \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "${{ runner.temp }}/DerivedData" \
             -only-testing:macos-support-toolsTests \
+            -enableCodeCoverage YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty
+
+      - name: Generate coverage report
+        run: |
+          slather coverage --build-directory "${{ runner.temp }}/DerivedData"
+
+      - name: Check changed-line coverage
+        run: |
+          set +e
+          diff-cover coverage/cobertura.xml \
+            --compare-branch="origin/${{ github.base_ref }}" \
+            --fail-under=80 \
+            --show-uncovered \
+            --format markdown:coverage/diff-cover.md
+          status=$?
+
+          cat coverage/diff-cover.md >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$status"
       
       - name: Run UI tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project macos-support-tools.xcodeproj \
             -scheme macos-support-tools \
@@ -99,7 +124,7 @@ jobs:
         with:
           name: macos-support-tools-build-${{ github.event.pull_request.number }}
           path: |
-            ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Release/*.app
+            ${{ runner.temp }}/DerivedData/Build/Products/Release/*.app
           retention-days: 7
       
       - name: Upload test results
@@ -108,6 +133,6 @@ jobs:
         with:
           name: test-results-${{ github.event.pull_request.number }}
           path: |
-            ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
+            ${{ runner.temp }}/DerivedData/**/Logs/Test/*.xcresult
           retention-days: 7
           if-no-files-found: ignore
