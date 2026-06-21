@@ -115,6 +115,54 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes > 0)
     }
 
+    @Test func cleanupScanTracksFilePathsAsNonDirectories() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let payloadURL = rootURL.appending(path: "payload.tmp")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data("payload".utf8).write(to: payloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [payloadURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.url.resolvingSymlinksInPath() == payloadURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.modifiedDate != nil)
+        #expect(result.items.first?.isDirectory == false)
+        #expect(result.totalBytes > 0)
+    }
+
+    @Test @MainActor func cleanupCandidateRowsUseStoredDirectoryMetadata() {
+        let folderItem = CleanupItem(
+            url: URL(filePath: "/tmp/CleanupFixture"),
+            size: 1,
+            modifiedDate: nil,
+            isDirectory: true
+        )
+        let fileItem = CleanupItem(
+            url: URL(filePath: "/tmp/CleanupFixture.log"),
+            size: 1,
+            modifiedDate: nil,
+            isDirectory: false
+        )
+
+        _ = CleanupCandidateRow(item: folderItem).body
+        _ = CleanupCandidateRow(item: fileItem).body
+    }
+
     @Test func cleanupMovesDeletableItemsToTrash() throws {
         let firstURL = URL(filePath: "/tmp/cleanup-first")
         let secondURL = URL(filePath: "/tmp/cleanup-second")
