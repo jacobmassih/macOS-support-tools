@@ -481,6 +481,212 @@ struct macos_support_toolsTests {
         #expect(!reloadedManager.mouseButtonsEnabled)
     }
 
+    @Test func keyboardDebounceFilterSuppressesFastDuplicateKeyDowns() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let bouncedAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let fastSWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 1,
+            timestamp: 1_070_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(bouncedAWasSuppressed)
+        #expect(!laterAWasSuppressed)
+        #expect(!fastSWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsAutorepeatEvents() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let repeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!repeatAWasSuppressed)
+        #expect(!laterAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsHeldKeyRepeatEvents() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let firstRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let nextRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_520_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!firstRepeatAWasSuppressed)
+        #expect(!nextRepeatAWasSuppressed)
+
+        filter.handleKeyUp(keyCode: 0)
+
+        let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_600_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!nextPressAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsFastRepressAfterRelease() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        _ = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        _ = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        filter.handleKeyUp(keyCode: 0)
+
+        let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_520_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!nextPressAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsDifferentKeysDuringRepeat() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let firstRepeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_500_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let fastSWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 1,
+            timestamp: 1_520_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!firstRepeatAWasSuppressed)
+        #expect(!fastSWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterAllowsLaterPressesAfterAutorepeat() throws {
+        var filter = KeyboardDebounceFilter()
+        let debounceNanoseconds: UInt64 = 45_000_000
+
+        let firstAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_000_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let repeatAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_020_000_000,
+            isAutorepeat: true,
+            debounceNanoseconds: debounceNanoseconds
+        )
+        let laterAWasSuppressed = filter.shouldSuppressKeyDown(
+            keyCode: 0,
+            timestamp: 1_060_000_000,
+            debounceNanoseconds: debounceNanoseconds
+        )
+
+        #expect(!firstAWasSuppressed)
+        #expect(!repeatAWasSuppressed)
+        #expect(!laterAWasSuppressed)
+    }
+
+    @Test func keyboardDebounceFilterPersistsEnabledStateAndDebounceWindow() throws {
+        let suiteName = "KeyboardDebounceFilterPersistenceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+        manager.keyboardDebounceDelayMilliseconds = 30
+
+        let reloadedManager = makeKeyboardManager(userDefaults: userDefaults)
+
+        #expect(reloadedManager.keyboardDebounceEnabled)
+        #expect(reloadedManager.keyboardDebounceDelayMilliseconds == 30)
+    }
+
+    @Test func keyboardDebounceFilterDebounceWindowIsClamped() throws {
+        let suiteName = "KeyboardDebounceFilterClampTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+
+        manager.keyboardDebounceDelayMilliseconds = 1
+        #expect(manager.keyboardDebounceDelayMilliseconds == 5)
+
+        manager.keyboardDebounceDelayMilliseconds = 250
+        #expect(manager.keyboardDebounceDelayMilliseconds == 100)
+    }
+
     @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {
         let suiteName = "MouseManagerDetectedDeviceSettingsTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -649,8 +855,14 @@ private func makeMouseDevice(
 private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
     MouseManager(
         userDefaults: userDefaults,
-        accessibilityManager: AccessibilityManager(),
-        startsSystemServices: false
+        accessibilityManager: AccessibilityManager()
+    )
+}
+
+private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager {
+    KeyboardManager(
+        userDefaults: userDefaults,
+        accessibilityManager: AccessibilityManager()
     )
 }
 

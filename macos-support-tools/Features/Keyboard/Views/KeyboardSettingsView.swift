@@ -20,6 +20,31 @@ struct KeyboardSettingsView: View {
                 isOn: $keyboardManager.keyboardBlocked
             )
             .disabled(!accessibilityManager.isAccessibilityEnabled)
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Keyboard debounce",
+                subtitle: "Drop duplicate key presses that arrive within the debounce window.",
+                systemImage: "keyboard.chevron.compact.down",
+                isOn: $keyboardManager.keyboardDebounceEnabled
+            )
+            .disabled(!accessibilityManager.isAccessibilityEnabled)
+
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Debounce window") {
+                    Text("\(Int(keyboardManager.keyboardDebounceDelayMilliseconds)) ms")
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: $keyboardManager.keyboardDebounceDelayMilliseconds,
+                    in: 5...100,
+                    step: 5
+                )
+            }
+            .padding(.leading, 42)
+            .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
         }
 
         if !accessibilityManager.isAccessibilityEnabled {

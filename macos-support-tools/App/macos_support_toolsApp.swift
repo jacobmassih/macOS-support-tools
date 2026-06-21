@@ -12,6 +12,8 @@ struct macos_support_toolsApp: App {
         let keyboardManager = KeyboardManager(accessibilityManager: accessibilityManager)
         let mouseManager = MouseManager(accessibilityManager: accessibilityManager)
         accessibilityManager.refresh()
+        keyboardManager.startSystemServices()
+        mouseManager.startSystemServices()
 
         _accessibilityManager = State(initialValue: accessibilityManager)
         _keyboardManager = State(initialValue: keyboardManager)
