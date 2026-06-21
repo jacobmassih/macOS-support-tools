@@ -16,7 +16,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       
@@ -36,7 +36,7 @@ jobs:
           xcrun --show-sdk-version
       
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/Library/Caches/Homebrew
@@ -119,7 +119,7 @@ jobs:
           echo "Build completed on macOS $(sw_vers -productVersion)" >> $GITHUB_STEP_SUMMARY
       
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: success()
         with:
           name: macos-support-tools-build-${{ github.event.pull_request.number }}
@@ -128,7 +128,7 @@ jobs:
           retention-days: 7
       
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: test-results-${{ github.event.pull_request.number }}
