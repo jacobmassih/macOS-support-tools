@@ -1,8 +1,7 @@
 import CoreGraphics
 
 struct KeyboardDebounceFilter {
-    private var lastKeyDownTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
-    private var keyDownKeyCodes: Set<Int64> = []
+    private var lastKeyEventTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
 
     mutating func shouldSuppressKeyDown(
         keyCode: Int64,
@@ -10,12 +9,9 @@ struct KeyboardDebounceFilter {
         isAutorepeat: Bool = false,
         debounceNanoseconds: UInt64
     ) -> Bool {
-        let isKeyDown = keyDownKeyCodes.contains(keyCode)
-
-        guard let previousTimestamp = lastKeyDownTimestampByKeyCode[keyCode],
+        guard let previousTimestamp = lastKeyEventTimestampByKeyCode[keyCode],
               timestamp >= previousTimestamp else {
-            lastKeyDownTimestampByKeyCode[keyCode] = timestamp
-            keyDownKeyCodes.insert(keyCode)
+            lastKeyEventTimestampByKeyCode[keyCode] = timestamp
             return false
         }
 
@@ -25,21 +21,19 @@ struct KeyboardDebounceFilter {
             return false
         }
 
-        guard isKeyDown, deltaNanoseconds <= debounceNanoseconds else {
-            lastKeyDownTimestampByKeyCode[keyCode] = timestamp
-            keyDownKeyCodes.insert(keyCode)
+        guard deltaNanoseconds <= debounceNanoseconds else {
+            lastKeyEventTimestampByKeyCode[keyCode] = timestamp
             return false
         }
 
         return true
     }
 
-    mutating func handleKeyUp(keyCode: Int64) {
-        keyDownKeyCodes.remove(keyCode)
+    mutating func handleKeyUp(keyCode: Int64, timestamp: CGEventTimestamp) {
+        lastKeyEventTimestampByKeyCode[keyCode] = timestamp
     }
 
     mutating func reset() {
-        lastKeyDownTimestampByKeyCode.removeAll()
-        keyDownKeyCodes.removeAll()
+        lastKeyEventTimestampByKeyCode.removeAll()
     }
 }

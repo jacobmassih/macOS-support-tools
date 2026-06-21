@@ -564,7 +564,7 @@ struct macos_support_toolsTests {
         #expect(!firstRepeatAWasSuppressed)
         #expect(!nextRepeatAWasSuppressed)
 
-        filter.handleKeyUp(keyCode: 0)
+        filter.handleKeyUp(keyCode: 0, timestamp: 1_530_000_000)
 
         let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
             keyCode: 0,
@@ -575,7 +575,7 @@ struct macos_support_toolsTests {
         #expect(!nextPressAWasSuppressed)
     }
 
-    @Test func keyboardDebounceFilterAllowsFastRepressAfterRelease() throws {
+    @Test func keyboardDebounceFilterSuppressesFastDuplicateAfterRelease() throws {
         var filter = KeyboardDebounceFilter()
         let debounceNanoseconds: UInt64 = 45_000_000
 
@@ -591,15 +591,15 @@ struct macos_support_toolsTests {
             debounceNanoseconds: debounceNanoseconds
         )
 
-        filter.handleKeyUp(keyCode: 0)
+        filter.handleKeyUp(keyCode: 0, timestamp: 1_510_000_000)
 
-        let nextPressAWasSuppressed = filter.shouldSuppressKeyDown(
+        let bouncedAWasSuppressed = filter.shouldSuppressKeyDown(
             keyCode: 0,
             timestamp: 1_520_000_000,
             debounceNanoseconds: debounceNanoseconds
         )
 
-        #expect(!nextPressAWasSuppressed)
+        #expect(bouncedAWasSuppressed)
     }
 
     @Test func keyboardDebounceFilterAllowsDifferentKeysDuringRepeat() throws {
