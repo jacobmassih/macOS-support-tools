@@ -1,7 +1,8 @@
 import CoreGraphics
 
 struct KeyboardDebounceFilter {
-    private var lastTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
+    private var lastKeyDownTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
+    private var pressedKeyCodes: Set<Int64> = []
     private var repeatingKeyCodes: Set<Int64> = []
 
     mutating func shouldSuppressKeyDown(
@@ -10,14 +11,17 @@ struct KeyboardDebounceFilter {
         isAutorepeat: Bool = false,
         debounceNanoseconds: UInt64
     ) -> Bool {
-        guard let previousTimestamp = lastTimestampByKeyCode[keyCode],
+        guard let previousTimestamp = lastKeyDownTimestampByKeyCode[keyCode],
               timestamp >= previousTimestamp else {
-            lastTimestampByKeyCode[keyCode] = timestamp
+            lastKeyDownTimestampByKeyCode[keyCode] = timestamp
+            pressedKeyCodes.insert(keyCode)
             return false
         }
 
         if isAutorepeat {
-            if !repeatingKeyCodes.contains(keyCode), timestamp - previousTimestamp <= debounceNanoseconds {
+            if pressedKeyCodes.contains(keyCode),
+               !repeatingKeyCodes.contains(keyCode),
+               timestamp - previousTimestamp <= debounceNanoseconds {
                 return true
             }
 
@@ -25,21 +29,23 @@ struct KeyboardDebounceFilter {
             return false
         }
 
-        guard timestamp - previousTimestamp <= debounceNanoseconds else {
-            lastTimestampByKeyCode[keyCode] = timestamp
+        guard pressedKeyCodes.contains(keyCode), timestamp - previousTimestamp <= debounceNanoseconds else {
+            lastKeyDownTimestampByKeyCode[keyCode] = timestamp
+            pressedKeyCodes.insert(keyCode)
             return false
         }
 
         return true
     }
 
-    mutating func keyDidRelease(keyCode: Int64, timestamp: CGEventTimestamp) {
-        lastTimestampByKeyCode[keyCode] = timestamp
+    mutating func keyDidRelease(keyCode: Int64) {
+        pressedKeyCodes.remove(keyCode)
         repeatingKeyCodes.remove(keyCode)
     }
 
     mutating func reset() {
-        lastTimestampByKeyCode.removeAll()
+        lastKeyDownTimestampByKeyCode.removeAll()
+        pressedKeyCodes.removeAll()
         repeatingKeyCodes.removeAll()
     }
 }
