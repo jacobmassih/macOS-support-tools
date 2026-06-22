@@ -5,7 +5,7 @@ struct CleanupCandidateRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: itemSystemImage)
+            Image(systemName: item.systemImage)
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
 
@@ -45,12 +45,4 @@ struct CleanupCandidateRow: View {
         .padding(.vertical, 4)
     }
 
-    private var itemSystemImage: String {
-        var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: item.url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            return "folder"
-        }
-
-        return "doc"
-    }
 }

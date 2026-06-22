@@ -80,6 +80,7 @@ struct macos_support_toolsTests {
 
         #expect(result.itemCount == 1)
         #expect(result.items.first?.url.resolvingSymlinksInPath() == appBundleURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.isDirectory == true)
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
@@ -110,7 +111,56 @@ struct macos_support_toolsTests {
 
         #expect(result.itemCount == 1)
         #expect(result.items.map { $0.url.resolvingSymlinksInPath() } == [payloadURL.resolvingSymlinksInPath()])
+        #expect(result.items.first?.isDirectory == false)
         #expect(result.totalBytes > 0)
+    }
+
+    @Test func cleanupScanTracksFilePathsAsNonDirectories() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let payloadURL = rootURL.appending(path: "payload.tmp")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data("payload".utf8).write(to: payloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [payloadURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.url.resolvingSymlinksInPath() == payloadURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.modifiedDate != nil)
+        #expect(result.items.first?.isDirectory == false)
+        #expect(result.totalBytes > 0)
+    }
+
+    @Test @MainActor func cleanupCandidateRowsUseStoredDirectoryMetadata() {
+        let folderItem = CleanupItem(
+            url: URL(filePath: "/tmp/CleanupFixture"),
+            size: 1,
+            modifiedDate: nil,
+            isDirectory: true
+        )
+        let fileItem = CleanupItem(
+            url: URL(filePath: "/tmp/CleanupFixture.log"),
+            size: 1,
+            modifiedDate: nil,
+            isDirectory: false
+        )
+
+        _ = CleanupCandidateRow(item: folderItem).body
+        _ = CleanupCandidateRow(item: fileItem).body
     }
 
     @Test func cleanupMovesDeletableItemsToTrash() throws {
@@ -729,8 +779,13 @@ struct macos_support_toolsTests {
         let device = makeMouseDevice()
 
         manager.addDevice(device)
+        manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
         manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
+        manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
+
+        #expect(manager.connectedDevices.map(\.id) == [device.id])
+
         manager.removeDisconnectedDevices(currentDeviceIDs: [])
 
         #expect(manager.connectedDevices.isEmpty)

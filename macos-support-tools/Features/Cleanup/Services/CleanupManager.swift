@@ -166,7 +166,8 @@ final class CleanupManager {
                 CleanupItem(
                     url: directoryURL,
                     size: folderSize(at: directoryURL),
-                    modifiedDate: modifiedDate(for: directoryURL)
+                    modifiedDate: modifiedDate(for: directoryURL),
+                    isDirectory: isDirectory(at: directoryURL)
                 )
             ]
         }
@@ -175,7 +176,8 @@ final class CleanupManager {
             CleanupItem(
                 url: url,
                 size: folderSize(at: url),
-                modifiedDate: modifiedDate(for: url)
+                modifiedDate: modifiedDate(for: url),
+                isDirectory: isDirectory(at: url)
             )
         }
     }
@@ -221,5 +223,9 @@ final class CleanupManager {
 
     nonisolated private static func modifiedDate(for url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
+    nonisolated private static func isDirectory(at url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
     }
 }
