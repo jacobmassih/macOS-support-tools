@@ -40,6 +40,10 @@ struct CleanupItem: Identifiable, Codable {
     let size: Int64
     let modifiedDate: Date?
     var isDirectory = false
+
+    var systemImage: String {
+        isDirectory ? "folder" : "doc"
+    }
 }
 
 struct CleanupScanResult: Identifiable, Codable {
