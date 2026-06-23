@@ -918,6 +918,25 @@ struct macos_support_toolsTests {
         #expect(manager.menuBarTitle == "Support Tools")
     }
 
+    @Test @MainActor func thermalManagerRefreshReportsSensorErrors() async {
+        let manager = ThermalManager(
+            sensorClient: .mock {
+                throw ThermalSensorError.serviceUnavailable
+            },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+
+        await manager.refresh()
+
+        #expect(manager.reading.cpuCelsius == nil)
+        #expect(manager.reading.gpuCelsius == nil)
+        #expect(manager.reading.status == .failed("Temperature sensors are unavailable on this Mac."))
+        #expect(manager.reading.lastError == "Temperature sensors are unavailable on this Mac.")
+        #expect(manager.reading.lastUpdated != nil)
+        #expect(manager.statusDescription == "Temperature reading failed")
+    }
+
     @Test @MainActor func thermalManagerPersistsTemperatureMenuBarSetting() {
         let userDefaults = makeIsolatedUserDefaults()
         let manager = ThermalManager(
