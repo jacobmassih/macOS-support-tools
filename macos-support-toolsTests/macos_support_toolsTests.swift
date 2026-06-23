@@ -870,6 +870,73 @@ struct macos_support_toolsTests {
         #expect(item.id == item.url)
         #expect(scanResult.id == .logs)
     }
+
+    @Test func thermalMenuBarFormattingHandlesFullPartialUnavailableAndStaleReadings() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let freshDate = now.addingTimeInterval(-5)
+        let staleDate = now.addingTimeInterval(-60)
+
+        #expect(ThermalManager.menuBarTitle(
+            for: ThermalReading(cpuCelsius: 60.6, gpuCelsius: 54.2, lastUpdated: freshDate, status: .available, lastError: nil),
+            now: now
+        ) == "CPU 61C  GPU 54C")
+        #expect(ThermalManager.menuBarTitle(
+            for: ThermalReading(cpuCelsius: 60.4, gpuCelsius: nil, lastUpdated: freshDate, status: .available, lastError: nil),
+            now: now
+        ) == "CPU 60C")
+        #expect(ThermalManager.menuBarTitle(
+            for: ThermalReading(cpuCelsius: nil, gpuCelsius: 54.6, lastUpdated: freshDate, status: .available, lastError: nil),
+            now: now
+        ) == "GPU 55C")
+        #expect(ThermalManager.menuBarTitle(
+            for: ThermalReading(cpuCelsius: nil, gpuCelsius: nil, lastUpdated: now, status: .unavailable, lastError: nil),
+            now: now
+        ) == "Temp --")
+        #expect(ThermalManager.menuBarTitle(
+            for: ThermalReading(cpuCelsius: 60.6, gpuCelsius: 54.2, lastUpdated: staleDate, status: .available, lastError: nil),
+            now: now
+        ) == "Temp --")
+    }
+
+    @Test @MainActor func thermalManagerRefreshUsesMockSensorClient() async {
+        let expectedReading = ThermalReading(
+            cpuCelsius: 63.2,
+            gpuCelsius: 55.8,
+            lastUpdated: Date(timeIntervalSince1970: 1_000),
+            status: .available,
+            lastError: nil
+        )
+        let manager = ThermalManager(
+            sensorClient: .mock { expectedReading },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+
+        await manager.refresh()
+
+        #expect(manager.reading == expectedReading)
+        #expect(manager.menuBarTitle == "Support Tools")
+    }
+
+    @Test @MainActor func thermalManagerPersistsTemperatureMenuBarSetting() {
+        let userDefaults = makeIsolatedUserDefaults()
+        let manager = ThermalManager(
+            sensorClient: .mock { .idle },
+            userDefaults: userDefaults,
+            startsPolling: false
+        )
+
+        manager.showTemperatureInMenuBar = true
+
+        let restoredManager = ThermalManager(
+            sensorClient: .mock { .idle },
+            userDefaults: userDefaults,
+            startsPolling: false
+        )
+
+        #expect(userDefaults.bool(forKey: ThermalManager.DefaultsKey.showTemperatureInMenuBar))
+        #expect(restoredManager.showTemperatureInMenuBar)
+    }
 }
 
 private func makeMouseDevice(
@@ -915,6 +982,13 @@ private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager 
         userDefaults: userDefaults,
         accessibilityManager: AccessibilityManager()
     )
+}
+
+private func makeIsolatedUserDefaults() -> UserDefaults {
+    let suiteName = "macos-support-tools-tests-\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    return userDefaults
 }
 
 private final class TrashRecorder: @unchecked Sendable {

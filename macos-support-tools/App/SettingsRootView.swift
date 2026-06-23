@@ -6,6 +6,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case cleanup = "Disk Cleanup"
     case citrix = "Citrix"
+    case thermal = "Temperature"
     case devices = "Devices"
     case app = "App"
 
@@ -18,6 +19,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .keyboard: return "keyboard"
         case .cleanup: return "sparkle.magnifyingglass"
         case .citrix: return "rectangle.connected.to.line.below"
+        case .thermal: return "thermometer.medium"
         case .devices: return "rectangle.stack.badge.plus"
         case .app: return "gearshape"
         }
@@ -50,6 +52,8 @@ struct SettingsRootView: View {
                         CleanupSettingsView()
                     case .citrix:
                         CitrixSettingsView()
+                    case .thermal:
+                        ThermalSettingsView()
                     case .devices:
                         DeviceSettingsView()
                     case .app:
@@ -77,5 +81,6 @@ struct SettingsRootView: View {
         .environment(accessibilityManager)
         .environment(KeyboardManager(accessibilityManager: accessibilityManager))
         .environment(MouseManager(accessibilityManager: accessibilityManager))
+        .environment(ThermalManager(startsPolling: false))
         .environment(CleanupManager())
 }

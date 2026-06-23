@@ -4,12 +4,14 @@ struct MenuBarManager: View {
     @Environment(AccessibilityManager.self) var accessibilityManager: AccessibilityManager
     @Environment(KeyboardManager.self) var keyboardManager: KeyboardManager
     @Environment(MouseManager.self) var mouseManager: MouseManager
+    @Environment(ThermalManager.self) var thermalManager: ThermalManager
     @State private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var keyboardManager = keyboardManager
         @Bindable var mouseManager = mouseManager
+        @Bindable var thermalManager = thermalManager
 
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
@@ -18,6 +20,26 @@ struct MenuBarManager: View {
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
             Toggle("Block Keyboard", isOn: $keyboardManager.keyboardBlocked)
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
+
+            Divider().padding(.vertical, 2)
+
+            Toggle("Show Temperature", isOn: $thermalManager.showTemperatureInMenuBar)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ThermalManager.detailValue(label: "CPU", value: thermalManager.reading.cpuCelsius))
+                Text(ThermalManager.detailValue(label: "GPU", value: thermalManager.reading.gpuCelsius))
+                Text(thermalManager.statusDescription)
+                Text("Updated: \(thermalManager.lastUpdatedDescription)")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if let lastError = thermalManager.reading.lastError {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider().padding(.vertical, 2)
 
@@ -39,7 +61,7 @@ struct MenuBarManager: View {
             .buttonStyle(.plain)
         }
         .padding(12)
-        .frame(width: 230)
+        .frame(width: 260)
         .onAppear {
             launchAtLogin.refresh()
         }
@@ -54,5 +76,6 @@ struct StatusBarManager_Previews: PreviewProvider {
             .environment(accessibilityManager)
             .environment(KeyboardManager(accessibilityManager: accessibilityManager))
             .environment(MouseManager(accessibilityManager: accessibilityManager))
+            .environment(ThermalManager(startsPolling: false))
     }
 }
