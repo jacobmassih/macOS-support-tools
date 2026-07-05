@@ -743,6 +743,39 @@ struct macos_support_toolsTests {
         #expect(detectedDevice.button5Action == .none)
     }
 
+    @Test func mouseManagerAllowsButtonConfigurationForNewDevicesDetectedAtLaunch() throws {
+        let suiteName = "MouseManagerLaunchDetectedDeviceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+
+        // Initial detection at launch is the only path that populates
+        // connectedDevices without going through addDevice.
+        manager.setDetectedDevices([device])
+
+        #expect(manager.deviceSettings[device.id] != nil)
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonAction(for: device.id, buttonType: .button5, action: .middleClick)
+
+        let updatedDevice = try #require(manager.deviceSettings[device.id])
+        #expect(!updatedDevice.button4Enabled)
+        #expect(updatedDevice.button5Action == .middleClick)
+
+        let connectedDevice = try #require(manager.connectedDevices.first)
+        #expect(!connectedDevice.button4Enabled)
+        #expect(connectedDevice.button5Action == .middleClick)
+
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
+        let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
+        #expect(!persistedDevice.button4Enabled)
+        #expect(persistedDevice.button5Action == .middleClick)
+    }
+
     @Test func mouseManagerKeepsPersistedDeviceSettingsAfterDisconnect() throws {
         let suiteName = "MouseManagerDisconnectedDeviceSettingsTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
