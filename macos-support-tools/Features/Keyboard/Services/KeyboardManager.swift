@@ -147,6 +147,11 @@ import Observation
         CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
     }
 
+    fileprivate func reenableKeyboardEventTap() {
+        guard let keyboardEventTap else { return }
+        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
+    }
+
     private func disableKeyboardEventTap() {
         if let keyboardEventTap {
             CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
@@ -190,7 +195,7 @@ import Observation
     }
 }
 
-private func keyboardEventCallback(
+func keyboardEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
@@ -201,6 +206,11 @@ private func keyboardEventCallback(
     }
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    if type.isTapDisabledEvent {
+        keyboardManager.reenableKeyboardEventTap()
+        return Unmanaged.passRetained(event)
+    }
 
     if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOKit.hid
 import Testing
@@ -842,6 +843,71 @@ struct macos_support_toolsTests {
         #expect(item.id == item.url)
         #expect(scanResult.id == .logs)
     }
+
+    @Test func tapDisabledEventTypesAreRecognized() {
+        #expect(CGEventType.tapDisabledByTimeout.isTapDisabledEvent)
+        #expect(CGEventType.tapDisabledByUserInput.isTapDisabledEvent)
+        #expect(!CGEventType.scrollWheel.isTapDisabledEvent)
+        #expect(!CGEventType.otherMouseDown.isTapDisabledEvent)
+        #expect(!CGEventType.keyDown.isTapDisabledEvent)
+    }
+
+    @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
+        let suiteName = "MouseTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let scrollEvent = try #require(CGEvent(source: nil))
+        let buttonEvent = try #require(CGEvent(source: nil))
+
+        let scrollResult = invokeTapCallback(
+            scrollEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: scrollEvent
+        )
+        let buttonResult = invokeTapCallback(
+            buttonEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: buttonEvent
+        )
+
+        #expect(scrollResult === scrollEvent)
+        #expect(buttonResult === buttonEvent)
+    }
+
+    @Test func keyboardEventCallbackPassesThroughTapDisabledNotificationsWhileBlocking() throws {
+        let suiteName = "KeyboardTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let disabledNotification = try #require(CGEvent(source: nil))
+        let notificationResult = invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: disabledNotification
+        )
+        #expect(notificationResult === disabledNotification)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult == nil)
+    }
 }
 
 private func makeMouseDevice(
@@ -878,6 +944,18 @@ private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager 
         userDefaults: userDefaults,
         accessibilityManager: AccessibilityManager()
     )
+}
+
+private func invokeTapCallback(
+    _ callback: (CGEventTapProxy, CGEventType, CGEvent, UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>?,
+    refconObject: AnyObject,
+    type: CGEventType,
+    event: CGEvent
+) -> CGEvent? {
+    guard let proxy = OpaquePointer(bitPattern: 1) else { return nil }
+
+    let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
+    return callback(proxy, type, event, refcon)?.takeRetainedValue()
 }
 
 private final class TrashRecorder: @unchecked Sendable {

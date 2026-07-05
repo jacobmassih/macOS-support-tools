@@ -184,6 +184,14 @@ import Observation
         isAnyExternalMouseConnected && !naturalScrollEnabled
     }
 
+    internal func reenableScrollEventTap() {
+        eventTapController.reenableScrollEventTap()
+    }
+
+    internal func reenableButtonEventTap() {
+        eventTapController.reenableButtonEventTap()
+    }
+
     internal func updateTapStatus() {
         if !isAccessibilityEnabled {
             tapStatus = "Inactive - Accessibility permission required"
