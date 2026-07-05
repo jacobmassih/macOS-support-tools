@@ -104,9 +104,6 @@ private struct DeviceCard: View {
         let currentDevice = mouseManager.deviceSettings[device.id] ?? device
 
         switch buttonType {
-        case .left: return currentDevice.leftButtonEnabled
-        case .right: return currentDevice.rightButtonEnabled
-        case .middle: return currentDevice.middleButtonEnabled
         case .button4: return currentDevice.button4Enabled
         case .button5: return currentDevice.button5Enabled
         }
@@ -118,7 +115,6 @@ private struct DeviceCard: View {
         switch buttonType {
         case .button4: return currentDevice.button4Action
         case .button5: return currentDevice.button5Action
-        default: return .none
         }
     }
 }

@@ -76,29 +76,8 @@ enum MouseButtonAction: CaseIterable, Codable, Hashable {
 
 // Mouse button types for configuration
 enum MouseButtonType: CaseIterable, Hashable {
-    case left
-    case right
-    case middle
     case button4
     case button5
-    
-    var displayName: String {
-        switch self {
-        case .left: return "Left Button"
-        case .right: return "Right Button"
-        case .middle: return "Middle Button"
-        case .button4: return "Button 4 (Forward)"
-        case .button5: return "Button 5 (Back)"
-        }
-    }
-    
-    var defaultAction: MouseButtonAction {
-        switch self {
-        case .left, .right, .middle: return .none
-        case .button4: return .forward
-        case .button5: return .back
-        }
-    }
 }
 
 // Device-specific configuration
@@ -107,20 +86,11 @@ struct MouseDevice: Codable, Identifiable {
     let name: String
     let vendorID: Int
     let productID: Int
-    var naturalScrollEnabled: Bool
-    var lastConnected: Date
     // Mouse button settings
-    var leftButtonEnabled: Bool
-    var rightButtonEnabled: Bool
-    var middleButtonEnabled: Bool
     var button4Enabled: Bool
     var button5Enabled: Bool
-    
+
     // Button actions
     var button4Action: MouseButtonAction
     var button5Action: MouseButtonAction
-    
-    var displayName: String {
-        return "\(name) (\(String(format: "%04X", vendorID)):\(String(format: "%04X", productID)))"
-    }
 }

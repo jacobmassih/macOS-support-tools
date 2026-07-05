@@ -433,10 +433,6 @@ struct macos_support_toolsTests {
 
         let store = MouseDeviceStore(userDefaults: userDefaults)
         let device = makeMouseDevice(
-            naturalScrollEnabled: false,
-            leftButtonEnabled: false,
-            rightButtonEnabled: true,
-            middleButtonEnabled: false,
             button4Enabled: false,
             button5Enabled: true,
             button4Action: .middleClick,
@@ -450,11 +446,6 @@ struct macos_support_toolsTests {
         #expect(loadedDevice?.name == device.name)
         #expect(loadedDevice?.vendorID == device.vendorID)
         #expect(loadedDevice?.productID == device.productID)
-        #expect(loadedDevice?.naturalScrollEnabled == device.naturalScrollEnabled)
-        #expect(loadedDevice?.lastConnected == device.lastConnected)
-        #expect(loadedDevice?.leftButtonEnabled == device.leftButtonEnabled)
-        #expect(loadedDevice?.rightButtonEnabled == device.rightButtonEnabled)
-        #expect(loadedDevice?.middleButtonEnabled == device.middleButtonEnabled)
         #expect(loadedDevice?.button4Enabled == device.button4Enabled)
         #expect(loadedDevice?.button5Enabled == device.button5Enabled)
         #expect(loadedDevice?.button4Action == device.button4Action)
@@ -477,7 +468,7 @@ struct macos_support_toolsTests {
         manager.setDetectedDevices([device])
         #expect(!manager.shouldReverseScroll())
 
-        manager.toggleScrollDirection()
+        manager.naturalScrollEnabled = false
         #expect(!manager.naturalScrollEnabled)
         #expect(manager.shouldReverseScroll())
         #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
@@ -499,19 +490,13 @@ struct macos_support_toolsTests {
         let device = makeMouseDevice()
 
         manager.addDevice(device)
-        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
-        manager.updateButtonSettings(for: device.id, buttonType: .right, enabled: false)
-        manager.updateButtonSettings(for: device.id, buttonType: .middle, enabled: false)
         manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
         manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
         manager.updateButtonAction(for: device.id, buttonType: .button5, action: .none)
-        manager.toggleMouseButtons()
+        manager.mouseButtonsEnabled = false
 
         let updatedDevice = try #require(manager.deviceSettings[device.id])
-        #expect(!updatedDevice.leftButtonEnabled)
-        #expect(!updatedDevice.rightButtonEnabled)
-        #expect(!updatedDevice.middleButtonEnabled)
         #expect(!updatedDevice.button4Enabled)
         #expect(!updatedDevice.button5Enabled)
         #expect(updatedDevice.button4Action == .middleClick)
@@ -521,9 +506,6 @@ struct macos_support_toolsTests {
 
         let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let reloadedDevice = try #require(reloadedManager.deviceSettings[device.id])
-        #expect(!reloadedDevice.leftButtonEnabled)
-        #expect(!reloadedDevice.rightButtonEnabled)
-        #expect(!reloadedDevice.middleButtonEnabled)
         #expect(!reloadedDevice.button4Enabled)
         #expect(!reloadedDevice.button5Enabled)
         #expect(reloadedDevice.button4Action == .middleClick)
@@ -741,10 +723,6 @@ struct macos_support_toolsTests {
         }
 
         let persistedDevice = makeMouseDevice(
-            naturalScrollEnabled: false,
-            leftButtonEnabled: false,
-            rightButtonEnabled: false,
-            middleButtonEnabled: false,
             button4Enabled: false,
             button5Enabled: false,
             button4Action: .middleClick,
@@ -758,10 +736,6 @@ struct macos_support_toolsTests {
 
         let detectedDevice = try #require(manager.connectedDevices.first)
         #expect(detectedDevice.id == persistedDevice.id)
-        #expect(!detectedDevice.naturalScrollEnabled)
-        #expect(!detectedDevice.leftButtonEnabled)
-        #expect(!detectedDevice.rightButtonEnabled)
-        #expect(!detectedDevice.middleButtonEnabled)
         #expect(!detectedDevice.button4Enabled)
         #expect(!detectedDevice.button5Enabled)
         #expect(detectedDevice.button4Action == .middleClick)
@@ -780,7 +754,7 @@ struct macos_support_toolsTests {
 
         manager.addDevice(device)
         manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
-        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
         manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
 
@@ -793,12 +767,12 @@ struct macos_support_toolsTests {
         manager.addDevice(device)
 
         let reconnectedDevice = try #require(manager.connectedDevices.first)
-        #expect(!reconnectedDevice.leftButtonEnabled)
+        #expect(!reconnectedDevice.button5Enabled)
         #expect(reconnectedDevice.button4Action == .middleClick)
 
         let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
-        #expect(!persistedDevice.leftButtonEnabled)
+        #expect(!persistedDevice.button5Enabled)
         #expect(persistedDevice.button4Action == .middleClick)
     }
 
@@ -877,10 +851,6 @@ private func makeMouseDevice(
     name: String = "Test Mouse",
     vendorID: Int = 123,
     productID: Int = 456,
-    naturalScrollEnabled: Bool = true,
-    leftButtonEnabled: Bool = true,
-    rightButtonEnabled: Bool = true,
-    middleButtonEnabled: Bool = true,
     button4Enabled: Bool = true,
     button5Enabled: Bool = true,
     button4Action: MouseButtonAction = .forward,
@@ -891,11 +861,6 @@ private func makeMouseDevice(
         name: name,
         vendorID: vendorID,
         productID: productID,
-        naturalScrollEnabled: naturalScrollEnabled,
-        lastConnected: Date(timeIntervalSince1970: 1_234),
-        leftButtonEnabled: leftButtonEnabled,
-        rightButtonEnabled: rightButtonEnabled,
-        middleButtonEnabled: middleButtonEnabled,
         button4Enabled: button4Enabled,
         button5Enabled: button5Enabled,
         button4Action: button4Action,

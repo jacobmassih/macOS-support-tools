@@ -17,7 +17,6 @@ import Observation
     var isAccessibilityEnabled: Bool {
         accessibilityManager.isAccessibilityEnabled
     }
-    var aggressiveInversion = false
     var tapStatus = "Inactive"
     var mouseButtonsEnabled = true {
         didSet {
@@ -84,14 +83,6 @@ import Observation
         deviceMonitor.stop()
     }
 
-    func toggleScrollDirection() {
-        naturalScrollEnabled.toggle()
-    }
-
-    func toggleMouseButtons() {
-        mouseButtonsEnabled.toggle()
-    }
-
     func startSystemServices() {
         guard !hasStartedSystemServices else { return }
 
@@ -116,12 +107,6 @@ import Observation
         guard var device = deviceSettings[deviceId] else { return }
 
         switch buttonType {
-        case .left:
-            device.leftButtonEnabled = enabled
-        case .right:
-            device.rightButtonEnabled = enabled
-        case .middle:
-            device.middleButtonEnabled = enabled
         case .button4:
             device.button4Enabled = enabled
         case .button5:
@@ -160,11 +145,6 @@ import Observation
             name: ioDevice.productString ?? "Unknown Device",
             vendorID: ioDevice.vendorID,
             productID: ioDevice.productID,
-            naturalScrollEnabled: true,
-            lastConnected: Date(),
-            leftButtonEnabled: true,
-            rightButtonEnabled: true,
-            middleButtonEnabled: true,
             button4Enabled: true,
             button5Enabled: true,
             button4Action: .forward,
