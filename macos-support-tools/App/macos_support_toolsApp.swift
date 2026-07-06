@@ -6,6 +6,7 @@ struct macos_support_toolsApp: App {
     @State private var keyboardManager: KeyboardManager
     @State private var mouseManager: MouseManager
     @State private var cleanupManager = CleanupManager()
+    @State private var musicLaunchInterceptor = MusicLaunchInterceptor()
 
     init() {
         let accessibilityManager = AccessibilityManager()
@@ -26,6 +27,7 @@ struct macos_support_toolsApp: App {
                 .environment(accessibilityManager)
                 .environment(keyboardManager)
                 .environment(mouseManager)
+                .environment(musicLaunchInterceptor)
         }
         Window("Settings", id: "main") {
             SettingsRootView()
@@ -33,6 +35,7 @@ struct macos_support_toolsApp: App {
                 .environment(keyboardManager)
                 .environment(mouseManager)
                 .environment(cleanupManager)
+                .environment(musicLaunchInterceptor)
         }
         .windowResizability(.contentSize)
     }

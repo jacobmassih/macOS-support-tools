@@ -6,6 +6,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case keyboard = "Keyboard"
     case cleanup = "Disk Cleanup"
     case citrix = "Citrix"
+    case media = "Media"
     case devices = "Devices"
     case app = "App"
 
@@ -18,6 +19,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .keyboard: return "keyboard"
         case .cleanup: return "sparkle.magnifyingglass"
         case .citrix: return "rectangle.connected.to.line.below"
+        case .media: return "music.note"
         case .devices: return "rectangle.stack.badge.plus"
         case .app: return "gearshape"
         }
@@ -50,6 +52,8 @@ struct SettingsRootView: View {
                         CleanupSettingsView()
                     case .citrix:
                         CitrixSettingsView()
+                    case .media:
+                        MediaSettingsView()
                     case .devices:
                         DeviceSettingsView()
                     case .app:
@@ -78,4 +82,5 @@ struct SettingsRootView: View {
         .environment(KeyboardManager(accessibilityManager: accessibilityManager))
         .environment(MouseManager(accessibilityManager: accessibilityManager))
         .environment(CleanupManager())
+        .environment(MusicLaunchInterceptor())
 }
