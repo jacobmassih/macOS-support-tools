@@ -62,7 +62,6 @@ struct SettingsRootView: View {
             }
             .background(.background)
         }
-        .environment(mouseManager)
         .frame(minWidth: 820, minHeight: 560)
         .onAppear {
             launchAtLogin.refresh()
