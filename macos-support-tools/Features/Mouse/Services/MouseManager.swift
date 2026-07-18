@@ -64,7 +64,6 @@ import Observation
             DefaultsKey.citrixPassthroughEnabled: true
         ])
 
-        print("[MouseManager] Initialized and starting up.")
         loadDeviceSettings()
 
         naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
