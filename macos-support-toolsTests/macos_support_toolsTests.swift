@@ -971,6 +971,17 @@ struct macos_support_toolsTests {
         #expect(!manager.keyboardBlocked)
         #expect(manager.keyboardDebounceEnabled)
     }
+
+    @Test func mouseButtonActionRoundTripsRemainingCases() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+
+        for action in MouseButtonAction.allCases {
+            let data = try encoder.encode(action)
+            let decoded = try decoder.decode(MouseButtonAction.self, from: data)
+            #expect(decoded == action)
+        }
+    }
 }
 
 private func makeMouseDevice(
