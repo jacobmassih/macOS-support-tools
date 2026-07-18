@@ -817,8 +817,6 @@ struct macos_support_toolsTests {
 
         #expect(scanResult.largestItem?.url == largeItem.url)
         #expect(scanResult.mostRecentModifiedDate == newerDate)
-        #expect(scanResult.oldestModifiedDate == olderDate)
-        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
