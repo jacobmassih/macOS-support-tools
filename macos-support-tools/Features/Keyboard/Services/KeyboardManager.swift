@@ -126,7 +126,7 @@ import Observation
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
+            eventsOfInterest: eventMask,
             callback: keyboardEventCallback,
             userInfo: context
         )
@@ -170,12 +170,11 @@ import Observation
             return false
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
         guard type == .keyDown else {
             return false
         }
 
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,

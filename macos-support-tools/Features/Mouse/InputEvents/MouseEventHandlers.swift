@@ -16,9 +16,7 @@ func deviceAddedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, se
 func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
     let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
     DispatchQueue.main.async {
-        if let removedDevice = manager.createMouseDevice(from: device) {
-            manager.removeDevice(removedDevice)
-        }
+        manager.removeDevice(withID: device.deviceID)
     }
 }
 
@@ -39,8 +37,8 @@ func scrollEventCallback(
     // Only apply scroll reversal if we have external mouse connected and conditions are met
     if manager.shouldReverseScroll() {
         // Get the scroll deltas
-        let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
-        let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
+        let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
+        let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
         
         // Check for momentum scrolling phases - trackpad specific
         let scrollPhase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
@@ -58,15 +56,15 @@ func scrollEventCallback(
         // Only apply reversal to discrete scrolling events (mouse wheels)
         if isDiscreteScrolling && (abs(deltaY) >= 1.0 || abs(deltaX) >= 1.0) {
             // This appears to be a mouse wheel event - apply reversal
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: deltaY * -1)
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: deltaX * -1)
-            
+            event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: deltaY * -1)
+            event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: deltaX * -1)
+
             // Also reverse point deltas if they exist
-            let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-            let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+            let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+            let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
             if pointDeltaY != 0 || pointDeltaX != 0 {
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltaY * -1)
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltaX * -1)
+                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltaY * -1)
+                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltaX * -1)
             }
         }
     }

@@ -776,6 +776,27 @@ struct macos_support_toolsTests {
         #expect(persistedDevice.button4Action == .middleClick)
     }
 
+    @Test func mouseManagerRemoveDeviceByIDDropsMatchingDeviceAndIgnoresUnknownID() throws {
+        let suiteName = "MouseManagerRemoveDeviceByIDTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+        manager.addDevice(device)
+
+        // Removing an ID that was never added is a no-op.
+        manager.removeDevice(withID: "not-a-connected-device")
+        #expect(manager.connectedDevices.map(\.id) == [device.id])
+        #expect(manager.isAnyExternalMouseConnected)
+
+        manager.removeDevice(withID: device.id)
+        #expect(manager.connectedDevices.isEmpty)
+        #expect(!manager.isAnyExternalMouseConnected)
+    }
+
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
         let moved = CleanupItem(url: URL(filePath: "/tmp/moved"), size: 10, modifiedDate: nil)
         let skipped = CleanupItem(url: URL(filePath: "/tmp/skipped"), size: 20, modifiedDate: nil)
