@@ -220,12 +220,6 @@ import Observation
         }
 
         deviceSettings = savedSettings
-
-        for (index, device) in connectedDevices.enumerated() {
-            if let savedDevice = deviceSettings[device.id] {
-                connectedDevices[index] = savedDevice
-            }
-        }
     }
 
     private func saveDeviceSettings() {
