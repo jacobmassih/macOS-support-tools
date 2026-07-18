@@ -126,8 +126,6 @@ import Observation
             device.button4Action = action
         case .button5:
             device.button5Action = action
-        default:
-            break
         }
 
         deviceSettings[deviceId] = device
