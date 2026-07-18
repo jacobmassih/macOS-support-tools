@@ -44,11 +44,7 @@ struct MouseSettingsView: View {
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 
-                Button {
-                    accessibilityManager.refresh(prompt: true)
-                } label: {
-                    Label("Request Accessibility Access", systemImage: "lock.open")
-                }
+                AccessibilityAccessButton()
             }
         }
     }
