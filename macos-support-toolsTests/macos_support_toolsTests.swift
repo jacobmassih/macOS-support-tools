@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOKit.hid
 import Testing
@@ -511,6 +512,63 @@ struct macos_support_toolsTests {
         #expect(reloadedDevice.button4Action == .middleClick)
         #expect(reloadedDevice.button5Action == .none)
         #expect(!reloadedManager.mouseButtonsEnabled)
+    }
+
+    @Test func scrollEventCallbackPassesThroughTapDisabledEventsAndReenablesTap() throws {
+        let suiteName = "ScrollTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let refcon = Unmanaged.passUnretained(manager).toOpaque()
+        let proxy = try #require(CGEventTapProxy(bitPattern: 1))
+
+        for type in [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput] {
+            let event = try #require(CGEvent(source: nil))
+            let result = scrollEventCallback(proxy: proxy, type: type, event: event, refcon: refcon)
+            #expect(result?.takeRetainedValue() === event)
+        }
+    }
+
+    @Test func buttonEventCallbackPassesThroughTapDisabledEventsAndReenablesTap() throws {
+        let suiteName = "ButtonTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let refcon = Unmanaged.passUnretained(manager).toOpaque()
+        let proxy = try #require(CGEventTapProxy(bitPattern: 1))
+
+        for type in [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput] {
+            let event = try #require(CGEvent(source: nil))
+            let result = buttonEventCallback(proxy: proxy, type: type, event: event, refcon: refcon)
+            #expect(result?.takeRetainedValue() === event)
+        }
+    }
+
+    @Test func keyboardEventCallbackPassesThroughTapDisabledEventsAndReenablesTap() throws {
+        let suiteName = "KeyboardTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+        let refcon = Unmanaged.passUnretained(manager).toOpaque()
+        let proxy = try #require(CGEventTapProxy(bitPattern: 1))
+
+        for type in [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput] {
+            let event = try #require(CGEvent(source: nil))
+            let result = keyboardEventCallback(proxy: proxy, type: type, event: event, refcon: refcon)
+
+            // Tap-disabled pseudo-events must pass through untouched even while blocking is on.
+            #expect(result?.takeRetainedValue() === event)
+        }
     }
 
     @Test func keyboardDebounceFilterSuppressesFastDuplicateKeyDowns() throws {

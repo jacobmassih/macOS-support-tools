@@ -35,7 +35,13 @@ func scrollEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
+
+    // macOS disables a tap whose callback stalls; re-enable it so scroll reversal keeps working.
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        manager.reenableScrollTap()
+        return Unmanaged.passRetained(event)
+    }
+
     // Only apply scroll reversal if we have external mouse connected and conditions are met
     if manager.shouldReverseScroll() {
         // Get the scroll deltas
@@ -85,7 +91,13 @@ func buttonEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
+
+    // macOS disables a tap whose callback stalls; re-enable it so side-button actions keep working.
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        manager.reenableButtonTap()
+        return Unmanaged.passRetained(event)
+    }
+
     if manager.mouseButtonsEnabled == false {
         return Unmanaged.passRetained(event)
     }

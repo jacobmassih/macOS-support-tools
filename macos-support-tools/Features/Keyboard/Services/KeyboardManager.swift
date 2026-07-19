@@ -147,6 +147,11 @@ import Observation
         CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
     }
 
+    fileprivate func reenableKeyboardEventTap() {
+        guard let keyboardEventTap else { return }
+        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
+    }
+
     private func disableKeyboardEventTap() {
         if let keyboardEventTap {
             CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
@@ -190,7 +195,7 @@ import Observation
     }
 }
 
-private func keyboardEventCallback(
+func keyboardEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
@@ -201,6 +206,12 @@ private func keyboardEventCallback(
     }
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    // macOS disables a tap whose callback stalls; re-enable it so debounce/blocking keeps working.
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        keyboardManager.reenableKeyboardEventTap()
+        return Unmanaged.passRetained(event)
+    }
 
     if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil
