@@ -13,6 +13,13 @@ struct KeyboardSettingsView: View {
         )
 
         SettingsCard {
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
+        }
+
+        SettingsCard {
             SettingToggleRow(
                 title: "Block keyboard",
                 subtitle: "Temporarily suppress keyboard input while the app is running.",

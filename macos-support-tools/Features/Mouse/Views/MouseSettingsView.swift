@@ -31,6 +31,13 @@ struct MouseSettingsView: View {
         }
 
         SettingsCard {
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
+
+            Divider()
+
             LabeledContent("Connected external mouse") {
                 Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
                     .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
