@@ -103,26 +103,3 @@ private struct DeviceCard: View {
         }
     }
 }
-
-private extension MouseButtonType {
-    var title: String {
-        switch self {
-        case .button4: return "Button 4"
-        case .button5: return "Button 5"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .button4: return "Enable handling for the forward side button."
-        case .button5: return "Enable handling for the back side button."
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .button4: return "arrow.right.circle"
-        case .button5: return "arrow.left.circle"
-        }
-    }
-}
