@@ -5,6 +5,8 @@ struct OverviewSettingsView: View {
     let launchAtLogin: LaunchAtLogin
 
     var body: some View {
+        @Bindable var mouseManager = mouseManager
+
         SettingsHeader(
             title: "Settings",
             subtitle: "Control mouse behavior, Citrix compatibility, connected devices, and app startup."
@@ -53,7 +55,7 @@ struct OverviewSettingsView: View {
                 title: "Natural scroll",
                 subtitle: "Keep scroll direction consistent with macOS when an external mouse is connected.",
                 systemImage: "arrow.up.and.down",
-                isOn: mouseBinding(\.naturalScrollEnabled)
+                isOn: $mouseManager.naturalScrollEnabled
             )
 
             Divider()
@@ -62,7 +64,7 @@ struct OverviewSettingsView: View {
                 title: "Mouse buttons",
                 subtitle: "Apply configured actions to side mouse buttons.",
                 systemImage: "button.horizontal",
-                isOn: mouseBinding(\.mouseButtonsEnabled)
+                isOn: $mouseManager.mouseButtonsEnabled
             )
 
             Divider()
@@ -71,16 +73,8 @@ struct OverviewSettingsView: View {
                 title: "Citrix compatibility",
                 subtitle: "Let Citrix receive side-button events directly when Citrix Viewer is active.",
                 systemImage: "rectangle.connected.to.line.below",
-                isOn: mouseBinding(\.citrixPassthroughEnabled)
+                isOn: $mouseManager.citrixPassthroughEnabled
             )
-        }
-    }
-
-    private func mouseBinding(_ keyPath: ReferenceWritableKeyPath<MouseManager, Bool>) -> Binding<Bool> {
-        Binding {
-            mouseManager[keyPath: keyPath]
-        } set: {
-            mouseManager[keyPath: keyPath] = $0
         }
     }
 }
