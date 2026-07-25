@@ -55,10 +55,7 @@ struct KeyboardSettingsView: View {
 
             Divider()
 
-            LabeledContent("Tap status") {
-                Text(keyboardManager.tapStatus)
-                    .foregroundStyle(.secondary)
-            }
+            TapStatusRow(tapStatus: keyboardManager.tapStatus)
 
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()

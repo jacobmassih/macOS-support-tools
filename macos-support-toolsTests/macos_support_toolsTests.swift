@@ -716,6 +716,23 @@ struct macos_support_toolsTests {
         #expect(manager.keyboardDebounceDelayMilliseconds == 100)
     }
 
+    @Test func tapStatusDisplaySplitsBadgeFromReason() {
+        let active = TapStatusDisplay("Active")
+        #expect(active.isActive)
+        #expect(active.badge == "Active")
+        #expect(active.detail == nil)
+
+        let missingPermission = TapStatusDisplay("Inactive - Accessibility permission required")
+        #expect(!missingPermission.isActive)
+        #expect(missingPermission.badge == "Inactive")
+        #expect(missingPermission.detail == "Accessibility permission required")
+
+        let unavailable = TapStatusDisplay("Inactive - Event tap unavailable")
+        #expect(!unavailable.isActive)
+        #expect(unavailable.badge == "Inactive")
+        #expect(unavailable.detail == "Event tap unavailable")
+    }
+
     @Test @MainActor func keyboardManagerTapStatusReportsMissingAccessibilityPermission() throws {
         let suiteName = "KeyboardTapStatusPermissionTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
