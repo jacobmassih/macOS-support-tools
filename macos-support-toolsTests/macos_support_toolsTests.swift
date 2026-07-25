@@ -1,5 +1,6 @@
 import Foundation
 import IOKit.hid
+import SwiftUI
 import Testing
 @testable import macos_support_tools
 
@@ -879,15 +880,15 @@ struct macos_support_toolsTests {
         #expect(ThermalManager.menuBarTitle(
             for: ThermalReading(cpuCelsius: 60.6, gpuCelsius: 54.2, lastUpdated: freshDate, status: .available, lastError: nil),
             now: now
-        ) == "CPU 61C  GPU 54C")
+        ) == "CPU 61°C  GPU 54°C")
         #expect(ThermalManager.menuBarTitle(
             for: ThermalReading(cpuCelsius: 60.4, gpuCelsius: nil, lastUpdated: freshDate, status: .available, lastError: nil),
             now: now
-        ) == "CPU 60C")
+        ) == "CPU 60°C")
         #expect(ThermalManager.menuBarTitle(
             for: ThermalReading(cpuCelsius: nil, gpuCelsius: 54.6, lastUpdated: freshDate, status: .available, lastError: nil),
             now: now
-        ) == "GPU 55C")
+        ) == "GPU 55°C")
         #expect(ThermalManager.menuBarTitle(
             for: ThermalReading(cpuCelsius: nil, gpuCelsius: nil, lastUpdated: now, status: .unavailable, lastError: nil),
             now: now
@@ -955,6 +956,333 @@ struct macos_support_toolsTests {
 
         #expect(userDefaults.bool(forKey: ThermalManager.DefaultsKey.showTemperatureInMenuBar))
         #expect(restoredManager.showTemperatureInMenuBar)
+    }
+
+    /// The kernel's `SMCParamStruct` is 80 bytes. Swift gives no C layout guarantee and will
+    /// happily pack `SMCKeyInfo`'s tail padding, which shifts every later field 4 bytes low
+    /// and makes every SMC call fail. Pin the layout so that can never regress silently.
+    @Test func smcParamStructMatchesKernelLayout() {
+        #expect(MemoryLayout<SMCParamStruct>.stride == SMCParamStruct.kernelSize)
+        #expect(MemoryLayout<SMCKeyInfo>.size == 12)
+        #expect(MemoryLayout<SMCParamStruct>.offset(of: \.keyInfo) == 28)
+        #expect(MemoryLayout<SMCParamStruct>.offset(of: \.result) == 40)
+        #expect(MemoryLayout<SMCParamStruct>.offset(of: \.data32) == 44)
+        #expect(MemoryLayout<SMCParamStruct>.offset(of: \.bytes) == 48)
+    }
+
+    @Test func smcDecoderRoundTripsKeysAndTypeCodes() {
+        #expect(SMCDecoder.key("TC0P") == 0x5443_3050)
+        #expect(SMCDecoder.name(0x5443_3050) == "TC0P")
+        #expect(SMCDecoder.name(SMCDecoder.key("#KEY")) == "#KEY")
+        #expect(SMCDecoder.name(SMCDecoder.key("flt ")) == "flt ")
+    }
+
+    /// Bytes captured from a real `Tp09` sensor. The SMC returns `flt ` payloads little-endian;
+    /// decoding them big-endian yields -2.19e-12 rather than a temperature.
+    @Test func smcDecoderDecodesFloatPayloadsLittleEndian() {
+        let decoded = SMCDecoder.temperature(
+            bytes: [0xac, 0x1a, 0x5a, 0x42],
+            dataSize: 4,
+            dataType: SMCDecoder.key("flt ")
+        )
+
+        #expect(decoded != nil)
+        #expect(abs((decoded ?? 0) - 54.53) < 0.01)
+    }
+
+    /// `sp78` is signed 8.8 fixed point. Assembling it as `Int16(bytes[0]) << 8` traps on
+    /// overflow for anything at or above 128C and loses the sign bit for sub-zero readings.
+    @Test func smcDecoderDecodesSignedFixedPointWithoutOverflow() {
+        let type = SMCDecoder.key("sp78")
+
+        #expect(SMCDecoder.temperature(bytes: [0x32, 0x80], dataSize: 2, dataType: type) == 50.5)
+        #expect(SMCDecoder.temperature(bytes: [0x80, 0x00], dataSize: 2, dataType: type) == -128.0)
+        #expect(SMCDecoder.temperature(bytes: [0xff, 0x00], dataSize: 2, dataType: type) == -1.0)
+        #expect(SMCDecoder.temperature(bytes: [0x7f, 0x00], dataSize: 2, dataType: type) == 127.0)
+    }
+
+    @Test func smcDecoderDecodesUnsignedFixedPoint() {
+        #expect(SMCDecoder.temperature(
+            bytes: [0x00, 0xc8],
+            dataSize: 2,
+            dataType: SMCDecoder.key("fpe2")
+        ) == 50.0)
+    }
+
+    @Test func smcDecoderRejectsUnknownTypesAndTruncatedPayloads() {
+        #expect(SMCDecoder.temperature(bytes: [0x01, 0x02, 0x03, 0x04], dataSize: 4, dataType: SMCDecoder.key("ui32")) == nil)
+        #expect(SMCDecoder.temperature(bytes: [0x01, 0x02], dataSize: 2, dataType: SMCDecoder.key("flt ")) == nil)
+        #expect(SMCDecoder.temperature(bytes: [0x01], dataSize: 1, dataType: SMCDecoder.key("sp78")) == nil)
+        #expect(SMCDecoder.temperature(bytes: [], dataSize: 2, dataType: SMCDecoder.key("fpe2")) == nil)
+    }
+
+    /// Apple silicon spreads temperature across lowercase `Tp…`/`Tg…` cluster sensors; Intel
+    /// uses a fixed set of uppercase keys. Neither family may swallow the other.
+    @Test func smcDecoderClassifiesAppleSiliconAndIntelSensorKeys() {
+        #expect(SMCDecoder.sensorRole(forKey: "Tp09") == .cpu)
+        #expect(SMCDecoder.sensorRole(forKey: "Tp0U") == .cpu)
+        #expect(SMCDecoder.sensorRole(forKey: "Tg0f") == .gpu)
+        #expect(SMCDecoder.sensorRole(forKey: "TC0P") == .cpu)
+        #expect(SMCDecoder.sensorRole(forKey: "TCXC") == .cpu)
+        #expect(SMCDecoder.sensorRole(forKey: "TG0P") == .gpu)
+        #expect(SMCDecoder.sensorRole(forKey: "TG0D") == .gpu)
+        #expect(SMCDecoder.sensorRole(forKey: "TB0T") == nil)
+        #expect(SMCDecoder.sensorRole(forKey: "#KEY") == nil)
+        #expect(SMCDecoder.sensorRole(forKey: "TA0P") == nil)
+    }
+
+    @Test func smcDecoderFiltersImplausibleTemperatures() {
+        #expect(SMCDecoder.isPlausibleTemperature(54.5))
+        #expect(!SMCDecoder.isPlausibleTemperature(0))
+        #expect(!SMCDecoder.isPlausibleTemperature(-40))
+        #expect(!SMCDecoder.isPlausibleTemperature(3000))
+    }
+
+    @Test func smcDecoderAveragesClusterSamples() {
+        #expect(SMCDecoder.average([]) == nil)
+        #expect(SMCDecoder.average([50, 60, 70]) == 60)
+
+        let reading = SMCDecoder.reading(
+            cpuSamples: [50, 60],
+            gpuSamples: [40],
+            timestamp: Date(timeIntervalSince1970: 500)
+        )
+
+        #expect(reading.cpuCelsius == 55)
+        #expect(reading.gpuCelsius == 40)
+        #expect(reading.status == .available)
+        #expect(reading.lastError == nil)
+        #expect(reading.lastUpdated == Date(timeIntervalSince1970: 500))
+    }
+
+    @Test func smcDecoderReportsUnavailableWhenNoSamplesDecode() {
+        let reading = SMCDecoder.reading(
+            cpuSamples: [],
+            gpuSamples: [],
+            timestamp: Date(timeIntervalSince1970: 500)
+        )
+
+        #expect(reading.cpuCelsius == nil)
+        #expect(reading.gpuCelsius == nil)
+        #expect(reading.status == .unavailable)
+        #expect(reading.lastError == "No CPU or GPU temperature sensors returned degree values.")
+    }
+
+    @Test func smcDecoderReportsPartialReadingWhenOnlyOneClusterResponds() {
+        let reading = SMCDecoder.reading(cpuSamples: [61], gpuSamples: [])
+
+        #expect(reading.cpuCelsius == 61)
+        #expect(reading.gpuCelsius == nil)
+        #expect(reading.status == .available)
+    }
+
+    @Test func smcSensorScannerWalksKeyTableAndKeepsTemperatureSensors() {
+        let smc = FakeSMC(entries: [
+            "Tp09": .float(54.53),
+            "Tp0U": .float(58.0),
+            "Tg0f": .float(46.0),
+            "TB0T": .float(30.0),
+            "TP1t": .raw(type: "ui32", bytes: [0, 0, 0, 1]),
+            "Tp1x": .float(-127.0)
+        ])
+        let scanner = SMCSensorScanner(transport: smc.transport())
+
+        #expect(scanner.keyCount() == 6)
+
+        let discovered = scanner.discoverSensors()
+        let names = discovered.map { SMCDecoder.name($0.key) }.sorted()
+
+        // TB0T is not a CPU/GPU key, TP1t is not a temperature type, and Tp1x reads
+        // an implausible value, so none of them survive discovery.
+        #expect(names == ["Tg0f", "Tp09", "Tp0U"])
+        #expect(discovered.filter { $0.role == .cpu }.count == 2)
+        #expect(discovered.filter { $0.role == .gpu }.count == 1)
+    }
+
+    @Test func smcSensorScannerAveragesDiscoveredClusters() {
+        let smc = FakeSMC(entries: [
+            "Tp09": .float(50.0),
+            "Tp0U": .float(60.0),
+            "Tg0f": .float(45.0),
+            "Tg0k": .float(47.0)
+        ])
+        let scanner = SMCSensorScanner(transport: smc.transport())
+
+        let reading = scanner.reading(
+            sensors: scanner.discoverSensors(),
+            timestamp: Date(timeIntervalSince1970: 900)
+        )
+
+        #expect(reading.cpuCelsius == 55)
+        #expect(reading.gpuCelsius == 46)
+        #expect(reading.status == .available)
+        #expect(ThermalManager.menuBarTitle(for: reading, now: Date(timeIntervalSince1970: 900)) == "CPU 55°C  GPU 46°C")
+    }
+
+    @Test func smcSensorScannerHandlesUnresponsiveTransport() {
+        let scanner = SMCSensorScanner(transport: SMCTransport { _ in nil })
+
+        #expect(scanner.keyCount() == nil)
+        #expect(scanner.key(at: 0) == nil)
+        #expect(scanner.keyInfo(for: SMCDecoder.key("Tp09")) == nil)
+        #expect(scanner.discoverSensors().isEmpty)
+
+        let sensor = SMCSensor(
+            key: SMCDecoder.key("Tp09"),
+            role: .cpu,
+            info: SMCKeyInfo(dataSize: 4, dataType: SMCDecoder.key("flt "))
+        )
+        #expect(scanner.temperature(for: sensor) == nil)
+        #expect(scanner.reading(sensors: [sensor]).status == .unavailable)
+    }
+
+    @MainActor
+    @Test func thermalSettingsViewRendersReadingAndErrorStates() {
+        let available = ThermalManager(
+            sensorClient: .mock { .idle },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        renderForTests(ThermalSettingsView().environment(available))
+
+        let failing = ThermalManager(
+            sensorClient: .mock { throw ThermalSensorError.serviceUnavailable },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        renderForTests(ThermalSettingsView().environment(failing))
+    }
+
+    @MainActor
+    @Test func menuBarAndSettingsRootRenderWithThermalSection() {
+        let accessibilityManager = AccessibilityManager()
+        let thermalManager = ThermalManager(
+            sensorClient: .mock { .idle },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+
+        renderForTests(
+            MenuBarManager()
+                .environment(accessibilityManager)
+                .environment(KeyboardManager(accessibilityManager: accessibilityManager))
+                .environment(MouseManager(accessibilityManager: accessibilityManager))
+                .environment(thermalManager)
+        )
+
+        renderForTests(
+            SettingsRootView()
+                .environment(accessibilityManager)
+                .environment(KeyboardManager(accessibilityManager: accessibilityManager))
+                .environment(MouseManager(accessibilityManager: accessibilityManager))
+                .environment(thermalManager)
+                .environment(CleanupManager())
+        )
+    }
+}
+
+/// Forces SwiftUI to evaluate a view's `body` so view code counts as executed.
+@MainActor
+private func renderForTests(_ view: some View) {
+    let hostingView = NSHostingView(rootView: view)
+    hostingView.frame = CGRect(x: 0, y: 0, width: 600, height: 700)
+    hostingView.layoutSubtreeIfNeeded()
+}
+
+/// An in-memory stand-in for the AppleSMC key table, driving `SMCSensorScanner` without IOKit.
+private struct FakeSMC {
+    enum Entry {
+        case float(Float)
+        case raw(type: String, bytes: [UInt8])
+
+        var type: String {
+            switch self {
+            case .float: return "flt "
+            case .raw(let type, _): return type
+            }
+        }
+
+        var bytes: [UInt8] {
+            switch self {
+            case .float(let value):
+                let bits = value.bitPattern
+                // The SMC reports `flt ` payloads little-endian.
+                return [
+                    UInt8(bits & 0xff),
+                    UInt8((bits >> 8) & 0xff),
+                    UInt8((bits >> 16) & 0xff),
+                    UInt8((bits >> 24) & 0xff)
+                ]
+            case .raw(_, let bytes):
+                return bytes
+            }
+        }
+    }
+
+    let entries: [String: Entry]
+    let order: [String]
+
+    init(entries: [String: Entry]) {
+        self.entries = entries
+        self.order = entries.keys.sorted()
+    }
+
+    func transport() -> SMCTransport {
+        let entries = entries
+        let order = order
+
+        return SMCTransport { input in
+            var output = SMCParamStruct()
+            let name = SMCDecoder.name(input.key)
+
+            switch input.data8 {
+            case 8: // kSMCGetKeyFromIndex
+                let index = Int(input.data32)
+                guard index < order.count else { return nil }
+                output.key = SMCDecoder.key(order[index])
+                return output
+
+            case 9: // kSMCGetKeyInfo
+                if name == "#KEY" {
+                    output.keyInfo = SMCKeyInfo(dataSize: 4, dataType: SMCDecoder.key("ui32"))
+                    return output
+                }
+                guard let entry = entries[name] else { return nil }
+                output.keyInfo = SMCKeyInfo(
+                    dataSize: UInt32(entry.bytes.count),
+                    dataType: SMCDecoder.key(entry.type)
+                )
+                return output
+
+            case 5: // kSMCReadKey
+                if name == "#KEY" {
+                    let count = UInt32(order.count)
+                    output.setBytesForTests([
+                        UInt8((count >> 24) & 0xff),
+                        UInt8((count >> 16) & 0xff),
+                        UInt8((count >> 8) & 0xff),
+                        UInt8(count & 0xff)
+                    ])
+                    return output
+                }
+                guard let entry = entries[name] else { return nil }
+                output.setBytesForTests(entry.bytes)
+                return output
+
+            default:
+                return nil
+            }
+        }
+    }
+}
+
+private extension SMCParamStruct {
+    mutating func setBytesForTests(_ values: [UInt8]) {
+        withUnsafeMutableBytes(of: &bytes) { rawBuffer in
+            for (index, value) in values.prefix(rawBuffer.count).enumerated() {
+                rawBuffer[index] = value
+            }
+        }
     }
 }
 

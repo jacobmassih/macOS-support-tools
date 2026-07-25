@@ -126,7 +126,7 @@ final class ThermalManager {
             return nil
         }
 
-        return "\(label) \(Int(value.rounded()))C"
+        return "\(label) \(Int(value.rounded()))°C"
     }
 
     private func updatePollingState() {
