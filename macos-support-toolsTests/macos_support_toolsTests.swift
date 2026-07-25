@@ -757,11 +757,11 @@ struct macos_support_toolsTests {
         manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
         manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
-        manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
+        manager.removeDevice(makeMouseDevice(id: "999-888-location-777"))
 
         #expect(manager.connectedDevices.map(\.id) == [device.id])
 
-        manager.removeDisconnectedDevices(currentDeviceIDs: [])
+        manager.removeDevice(device)
 
         #expect(manager.connectedDevices.isEmpty)
 

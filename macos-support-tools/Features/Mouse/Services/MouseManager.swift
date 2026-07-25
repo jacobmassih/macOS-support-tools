@@ -78,7 +78,6 @@ import Observation
         }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        deviceMonitor.stopPolling()
         deviceMonitor.stop()
     }
 
@@ -90,7 +89,6 @@ import Observation
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
         updateTapStatus()
-        deviceMonitor.startPolling()
     }
 
     private func handleAccessibilityPermissionDidChange() {
@@ -168,11 +166,6 @@ import Observation
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
         connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
-    }
-
-    internal func removeDisconnectedDevices(currentDeviceIDs: Set<String>) {
-        connectedDevices.removeAll { !currentDeviceIDs.contains($0.id) }
         isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
 

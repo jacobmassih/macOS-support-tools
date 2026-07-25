@@ -5,7 +5,6 @@ import IOKit.hid
 final class HIDMouseDeviceMonitor {
     private weak var manager: MouseManager?
     private var hidManager: IOHIDManager?
-    private var deviceMonitorTimer: Timer?
 
     init(manager: MouseManager) {
         self.manager = manager
@@ -41,17 +40,6 @@ final class HIDMouseDeviceMonitor {
         self.hidManager = nil
     }
 
-    func startPolling() {
-        deviceMonitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.checkDeviceConnectionStatus()
-        }
-    }
-
-    func stopPolling() {
-        deviceMonitorTimer?.invalidate()
-        deviceMonitorTimer = nil
-    }
-
     private func detectInitialDevices() {
         guard let manager else { return }
 
@@ -60,11 +48,6 @@ final class HIDMouseDeviceMonitor {
         }
 
         manager.setDetectedDevices(detectedDevices)
-    }
-
-    private func checkDeviceConnectionStatus() {
-        let currentDeviceIDs = Set(currentIOHIDDevices().map(\.deviceID))
-        manager?.removeDisconnectedDevices(currentDeviceIDs: currentDeviceIDs)
     }
 
     private func currentIOHIDDevices() -> [IOHIDDevice] {
