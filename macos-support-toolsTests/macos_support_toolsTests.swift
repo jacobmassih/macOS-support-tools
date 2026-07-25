@@ -716,6 +716,67 @@ struct macos_support_toolsTests {
         #expect(manager.keyboardDebounceDelayMilliseconds == 100)
     }
 
+    @Test @MainActor func keyboardManagerTapStatusReportsMissingAccessibilityPermission() throws {
+        let suiteName = "KeyboardTapStatusPermissionTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let accessibilityManager = AccessibilityManager()
+        let manager = makeKeyboardManager(
+            userDefaults: userDefaults,
+            accessibilityManager: accessibilityManager
+        )
+
+        #expect(manager.tapStatus == "Inactive - Accessibility permission required")
+
+        manager.keyboardDebounceEnabled = true
+
+        #expect(manager.tapStatus == "Inactive - Accessibility permission required")
+    }
+
+    @Test @MainActor func keyboardManagerTapStatusReportsWhenNoFeaturesAreEnabled() throws {
+        let suiteName = "KeyboardTapStatusNoFeaturesTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let accessibilityManager = AccessibilityManager()
+        let manager = makeKeyboardManager(
+            userDefaults: userDefaults,
+            accessibilityManager: accessibilityManager
+        )
+
+        accessibilityManager.isAccessibilityEnabled = true
+
+        #expect(manager.tapStatus == "Inactive - No keyboard features enabled")
+    }
+
+    @Test @MainActor func keyboardManagerTapStatusFollowsAccessibilityPermissionChanges() throws {
+        let suiteName = "KeyboardTapStatusPermissionChangeTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let accessibilityManager = AccessibilityManager()
+        let manager = makeKeyboardManager(
+            userDefaults: userDefaults,
+            accessibilityManager: accessibilityManager
+        )
+
+        accessibilityManager.isAccessibilityEnabled = true
+        manager.keyboardBlocked = true
+
+        #expect(manager.tapStatus != "Inactive - Accessibility permission required")
+
+        accessibilityManager.isAccessibilityEnabled = false
+
+        #expect(manager.tapStatus == "Inactive - Accessibility permission required")
+    }
+
     @Test func mouseManagerAppliesPersistedDeviceSettingsWhenDevicesAreDetectedAfterInit() throws {
         let suiteName = "MouseManagerDetectedDeviceSettingsTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -1002,10 +1063,13 @@ private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
     )
 }
 
-private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager {
+private func makeKeyboardManager(
+    userDefaults: UserDefaults,
+    accessibilityManager: AccessibilityManager = AccessibilityManager()
+) -> KeyboardManager {
     KeyboardManager(
         userDefaults: userDefaults,
-        accessibilityManager: AccessibilityManager()
+        accessibilityManager: accessibilityManager
     )
 }
 

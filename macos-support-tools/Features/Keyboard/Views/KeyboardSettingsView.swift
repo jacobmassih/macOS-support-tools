@@ -13,13 +13,6 @@ struct KeyboardSettingsView: View {
         )
 
         SettingsCard {
-            PermissionStatusRow(
-                title: "Accessibility access",
-                isGranted: accessibilityManager.isAccessibilityEnabled
-            )
-        }
-
-        SettingsCard {
             SettingToggleRow(
                 title: "Block keyboard",
                 subtitle: "Temporarily suppress keyboard input while the app is running.",
@@ -54,8 +47,22 @@ struct KeyboardSettingsView: View {
             .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
         }
 
-        if !accessibilityManager.isAccessibilityEnabled {
-            SettingsCard {
+        SettingsCard {
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
+
+            Divider()
+
+            LabeledContent("Tap status") {
+                Text(keyboardManager.tapStatus)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !accessibilityManager.isAccessibilityEnabled {
+                Divider()
+
                 AccessibilityAccessButton()
             }
         }
