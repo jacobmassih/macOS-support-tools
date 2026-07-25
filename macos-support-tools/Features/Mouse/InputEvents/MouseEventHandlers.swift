@@ -33,43 +33,50 @@ func scrollEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
+
     // Only apply scroll reversal if we have external mouse connected and conditions are met
     if manager.shouldReverseScroll() {
-        // Get the scroll deltas
-        let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
-        let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
-        
-        // Check for momentum scrolling phases - trackpad specific
-        let scrollPhase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
-        let momentumPhase = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
-        
-        // If this has momentum phases, it's from trackpad - skip it completely
-        if scrollPhase != 0 || momentumPhase != 0 {
-            return Unmanaged.passRetained(event)
-        }
-        
-        // Check if this looks like discrete wheel scrolling (mouse)
-        // Mouse wheels typically generate integer or near-integer values
-        let isDiscreteScrolling = (abs(deltaY - round(deltaY)) < 0.01) || (abs(deltaX - round(deltaX)) < 0.01)
-        
-        // Only apply reversal to discrete scrolling events (mouse wheels)
-        if isDiscreteScrolling && (abs(deltaY) >= 1.0 || abs(deltaX) >= 1.0) {
-            // This appears to be a mouse wheel event - apply reversal
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: deltaY * -1)
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: deltaX * -1)
-
-            // Also reverse point deltas if they exist
-            let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-            let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-            if pointDeltaY != 0 || pointDeltaX != 0 {
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltaY * -1)
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltaX * -1)
-            }
-        }
+        reverseScrollIfNeeded(event)
     }
-    
+
     return Unmanaged.passRetained(event)
+}
+
+func reverseScrollIfNeeded(_ event: CGEvent) {
+    guard let reversal = ScrollReversalPolicy.reversal(for: event.scrollEventDescriptor) else {
+        return
+    }
+
+    event.applyScrollReversal(reversal)
+}
+
+extension CGEvent {
+    var scrollEventDescriptor: ScrollEventDescriptor {
+        ScrollEventDescriptor(
+            deltas: ScrollWheelDeltas(
+                vertical: getDoubleValueField(.scrollWheelEventDeltaAxis1),
+                horizontal: getDoubleValueField(.scrollWheelEventDeltaAxis2)
+            ),
+            pointDeltas: ScrollWheelDeltas(
+                vertical: getDoubleValueField(.scrollWheelEventPointDeltaAxis1),
+                horizontal: getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+            ),
+            scrollPhase: getIntegerValueField(.scrollWheelEventScrollPhase),
+            momentumPhase: getIntegerValueField(.scrollWheelEventMomentumPhase)
+        )
+    }
+
+    func applyScrollReversal(_ reversal: ScrollReversal) {
+        setDoubleValueField(.scrollWheelEventDeltaAxis1, value: reversal.deltas.vertical)
+        setDoubleValueField(.scrollWheelEventDeltaAxis2, value: reversal.deltas.horizontal)
+
+        guard let pointDeltas = reversal.pointDeltas else {
+            return
+        }
+
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltas.vertical)
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltas.horizontal)
+    }
 }
 
 func buttonEventCallback(

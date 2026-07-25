@@ -161,7 +161,7 @@ import Observation
         }
     }
 
-    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+    internal func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         if keyboardBlocked {
             return true
         }

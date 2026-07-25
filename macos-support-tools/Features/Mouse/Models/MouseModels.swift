@@ -55,6 +55,70 @@ enum HIDDeviceClassifier {
     }
 }
 
+// Scroll wheel deltas, named after the axis they represent rather than the
+// CGEvent field: axis 1 is vertical, axis 2 is horizontal.
+struct ScrollWheelDeltas: Equatable {
+    let vertical: Double
+    let horizontal: Double
+
+    var isZero: Bool {
+        vertical == 0 && horizontal == 0
+    }
+
+    var reversed: ScrollWheelDeltas {
+        ScrollWheelDeltas(vertical: vertical * -1, horizontal: horizontal * -1)
+    }
+}
+
+struct ScrollEventDescriptor: Equatable {
+    let deltas: ScrollWheelDeltas
+    let pointDeltas: ScrollWheelDeltas
+    let scrollPhase: Int64
+    let momentumPhase: Int64
+}
+
+// The deltas to write back to an event, or nil for `pointDeltas` when the
+// event carries none and they should be left alone.
+struct ScrollReversal: Equatable {
+    let deltas: ScrollWheelDeltas
+    let pointDeltas: ScrollWheelDeltas?
+}
+
+enum ScrollReversalPolicy {
+    // Mouse wheels report whole-number deltas; anything smaller is a trackpad
+    // gesture that macOS already handles via natural scrolling.
+    private static let discreteTolerance = 0.01
+    private static let minimumWheelDelta = 1.0
+
+    static func reversal(for descriptor: ScrollEventDescriptor) -> ScrollReversal? {
+        // Momentum phases only appear on trackpad scrolls - skip those entirely.
+        guard descriptor.scrollPhase == 0, descriptor.momentumPhase == 0 else {
+            return nil
+        }
+
+        guard isDiscreteScrolling(descriptor.deltas), hasWheelSizedDelta(descriptor.deltas) else {
+            return nil
+        }
+
+        return ScrollReversal(
+            deltas: descriptor.deltas.reversed,
+            pointDeltas: descriptor.pointDeltas.isZero ? nil : descriptor.pointDeltas.reversed
+        )
+    }
+
+    private static func isDiscreteScrolling(_ deltas: ScrollWheelDeltas) -> Bool {
+        isNearWholeNumber(deltas.vertical) || isNearWholeNumber(deltas.horizontal)
+    }
+
+    private static func hasWheelSizedDelta(_ deltas: ScrollWheelDeltas) -> Bool {
+        abs(deltas.vertical) >= minimumWheelDelta || abs(deltas.horizontal) >= minimumWheelDelta
+    }
+
+    private static func isNearWholeNumber(_ value: Double) -> Bool {
+        abs(value - round(value)) < discreteTolerance
+    }
+}
+
 // Mouse button actions for side buttons
 enum MouseButtonAction: CaseIterable, Codable, Hashable {
     case none
