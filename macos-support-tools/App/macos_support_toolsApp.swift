@@ -31,10 +31,14 @@ struct macos_support_toolsApp: App {
                 .environment(mouseManager)
                 .environment(thermalManager)
         } label: {
-            Label(
-                thermalManager.menuBarTitle,
-                systemImage: thermalManager.showTemperatureInMenuBar ? "thermometer.medium" : "wrench.and.screwdriver"
-            )
+            // The icon is the app's identity and stays put. Enabling the temperature
+            // readout only appends text beside it; with the readout off the menu bar
+            // item is the bare icon, exactly as before this feature existed.
+            if thermalManager.showTemperatureInMenuBar {
+                Label(thermalManager.menuBarTitle, systemImage: "wrench.and.screwdriver")
+            } else {
+                Image(systemName: "wrench.and.screwdriver")
+            }
         }
         Window("Settings", id: "main") {
             SettingsRootView()
