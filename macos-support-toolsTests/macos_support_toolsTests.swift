@@ -863,13 +863,13 @@ struct macos_support_toolsTests {
         let scrollEvent = try #require(CGEvent(source: nil))
         let buttonEvent = try #require(CGEvent(source: nil))
 
-        let scrollResult = invokeTapCallback(
+        let scrollResult = try invokeTapCallback(
             scrollEventCallback,
             refconObject: manager,
             type: .tapDisabledByTimeout,
             event: scrollEvent
         )
-        let buttonResult = invokeTapCallback(
+        let buttonResult = try invokeTapCallback(
             buttonEventCallback,
             refconObject: manager,
             type: .tapDisabledByUserInput,
@@ -880,7 +880,7 @@ struct macos_support_toolsTests {
         #expect(buttonResult === buttonEvent)
     }
 
-    @Test func keyboardEventCallbackPassesThroughTapDisabledNotificationsWhileBlocking() throws {
+    @Test func keyboardEventCallbackPassesThroughTimeoutNotificationsWhileBlocking() throws {
         let suiteName = "KeyboardTapDisabledTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
@@ -891,7 +891,7 @@ struct macos_support_toolsTests {
         manager.keyboardBlocked = true
 
         let disabledNotification = try #require(CGEvent(source: nil))
-        let notificationResult = invokeTapCallback(
+        let notificationResult = try invokeTapCallback(
             keyboardEventCallback,
             refconObject: manager,
             type: .tapDisabledByTimeout,
@@ -899,14 +899,77 @@ struct macos_support_toolsTests {
         )
         #expect(notificationResult === disabledNotification)
 
+        // A stall is not a user request: the block stays on.
+        #expect(manager.keyboardBlocked)
+
         let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
-        let keyDownResult = invokeTapCallback(
+        let keyDownResult = try invokeTapCallback(
             keyboardEventCallback,
             refconObject: manager,
             type: .keyDown,
             event: keyDownEvent
         )
         #expect(keyDownResult == nil)
+    }
+
+    @Test func keyboardTapDisabledByUserInputReleasesKeyboardBlock() async throws {
+        let suiteName = "KeyboardUserInputDisableTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+        #expect(result === notification)
+
+        // The release is hopped off the tap callback, so drain the main queue.
+        await MainActor.run {}
+
+        // The OS-level escape from Block Keyboard must actually unblock it,
+        // otherwise the toggle claims to be blocking a keyboard that works.
+        #expect(!manager.keyboardBlocked)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult === keyDownEvent)
+    }
+
+    @Test func keyboardTapDisabledByUserInputWithoutBlockingKeepsDebounceAlive() throws {
+        let suiteName = "KeyboardUserInputDebounceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+
+        // Debounce is not a lockout, so there is no escape to honour here.
+        #expect(result === notification)
+        #expect(!manager.keyboardBlocked)
+        #expect(manager.keyboardDebounceEnabled)
     }
 }
 
@@ -951,8 +1014,11 @@ private func invokeTapCallback(
     refconObject: AnyObject,
     type: CGEventType,
     event: CGEvent
-) -> CGEvent? {
-    guard let proxy = OpaquePointer(bitPattern: 1) else { return nil }
+) throws -> CGEvent? {
+    // #require rather than a nil-returning guard: the callbacks under test return
+    // nil to mean "event suppressed", so a helper that also returns nil on setup
+    // failure would let those assertions pass for the wrong reason.
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
 
     let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
     return callback(proxy, type, event, refcon)?.takeRetainedValue()

@@ -152,6 +152,26 @@ import Observation
         CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
     }
 
+    /// `.tapDisabledByUserInput` is user-initiated, so it is the one way out of a
+    /// full keyboard block that does not depend on the mouse. Releasing the block
+    /// takes priority over keeping the tap alive; silently re-arming it would
+    /// defeat the escape. Debounce is not a lockout, so it just gets its tap back.
+    fileprivate func handleUserInitiatedTapDisable() {
+        guard keyboardBlocked else {
+            print("[KeyboardManager] Keyboard tap disabled by user input; re-enabling for debounce.")
+            reenableKeyboardEventTap()
+            return
+        }
+
+        print("[KeyboardManager] Keyboard tap disabled by user input; releasing keyboard block.")
+
+        // Hop off the tap callback: clearing the flag tears this tap down, and
+        // invalidating a mach port from inside its own callout is best avoided.
+        DispatchQueue.main.async { [weak self] in
+            self?.keyboardBlocked = false
+        }
+    }
+
     private func disableKeyboardEventTap() {
         if let keyboardEventTap {
             CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
@@ -207,7 +227,13 @@ func keyboardEventCallback(
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
 
-    if type.isTapDisabledEvent {
+    if type == .tapDisabledByUserInput {
+        keyboardManager.handleUserInitiatedTapDisable()
+        return Unmanaged.passRetained(event)
+    }
+
+    if type == .tapDisabledByTimeout {
+        print("[KeyboardManager] Keyboard tap disabled by timeout; re-enabling.")
         keyboardManager.reenableKeyboardEventTap()
         return Unmanaged.passRetained(event)
     }

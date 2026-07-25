@@ -37,6 +37,7 @@ func scrollEventCallback(
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
+        print("[MouseManager] Scroll tap disabled by the system; re-enabling.")
         manager.reenableScrollEventTap()
         return Unmanaged.passRetained(event)
     }
@@ -92,6 +93,7 @@ func buttonEventCallback(
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
+        print("[MouseManager] Button tap disabled by the system; re-enabling.")
         manager.reenableButtonEventTap()
         return Unmanaged.passRetained(event)
     }
