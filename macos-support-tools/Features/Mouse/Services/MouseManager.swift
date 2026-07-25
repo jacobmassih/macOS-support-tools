@@ -165,9 +165,7 @@ import Observation
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
         connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
     }
-    internal func removeDisconnectedDevices(currentDeviceIDs: Set<String>) {
-        connectedDevices.removeAll { !currentDeviceIDs.contains($0.id) }
-    }
+    
     internal func getCurrentActiveDevice() -> MouseDevice? {
         connectedDevices.first
     }
