@@ -159,9 +159,6 @@ private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Un
         
         return nil // Event has been handled
         
-    case .custom:
-        // Handle custom action if needed
-        break
     case .none:
         break
     }

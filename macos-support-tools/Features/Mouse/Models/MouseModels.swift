@@ -61,7 +61,6 @@ enum MouseButtonAction: CaseIterable, Codable, Hashable {
     case back
     case forward
     case middleClick
-    case custom
     
     var displayName: String {
         switch self {
@@ -69,7 +68,6 @@ enum MouseButtonAction: CaseIterable, Codable, Hashable {
         case .back: return "Back"
         case .forward: return "Forward"
         case .middleClick: return "Middle Click"
-        case .custom: return "Custom"
         }
     }
 }
