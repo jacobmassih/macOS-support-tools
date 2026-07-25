@@ -35,7 +35,13 @@ func scrollEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
+
+    if type.isTapDisabledEvent {
+        print("[MouseManager] Scroll tap disabled by the system; re-enabling.")
+        manager.reenableScrollEventTap()
+        return Unmanaged.passRetained(event)
+    }
+
     // Only apply scroll reversal if we have external mouse connected and conditions are met
     if manager.shouldReverseScroll() {
         // Get the scroll deltas
@@ -85,7 +91,13 @@ func buttonEventCallback(
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
-    
+
+    if type.isTapDisabledEvent {
+        print("[MouseManager] Button tap disabled by the system; re-enabling.")
+        manager.reenableButtonEventTap()
+        return Unmanaged.passRetained(event)
+    }
+
     if manager.mouseButtonsEnabled == false {
         return Unmanaged.passRetained(event)
     }

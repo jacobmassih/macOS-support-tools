@@ -49,6 +49,10 @@ final class MouseEventTapController {
         manager.updateTapStatus()
     }
 
+    func reenableScrollEventTap() {
+        reenable(eventTap)
+    }
+
     func disableScrollEventTap() {
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
@@ -93,6 +97,15 @@ final class MouseEventTapController {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), buttonRunLoopSource, .commonModes)
         CGEvent.tapEnable(tap: buttonEventTap, enable: true)
         manager.updateTapStatus()
+    }
+
+    func reenableButtonEventTap() {
+        reenable(buttonEventTap)
+    }
+
+    private func reenable(_ tap: CFMachPort?) {
+        guard let tap else { return }
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     func disableButtonEventTap() {
