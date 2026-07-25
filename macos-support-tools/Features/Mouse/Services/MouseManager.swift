@@ -13,7 +13,7 @@ import Observation
 
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
-    var isAnyExternalMouseConnected = false
+    var isAnyExternalMouseConnected: Bool { !connectedDevices.isEmpty }
     var isAccessibilityEnabled: Bool {
         accessibilityManager.isAccessibilityEnabled
     }
@@ -155,20 +155,17 @@ import Observation
         let restoredDevice = restoredDeviceSettings(for: device)
         connectedDevices.append(restoredDevice)
         deviceSettings[device.id] = restoredDevice
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
 
     internal func removeDevice(_ device: MouseDevice) {
         connectedDevices.removeAll { $0.id == device.id }
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
         connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
-
+    
     internal func getCurrentActiveDevice() -> MouseDevice? {
         connectedDevices.first
     }
