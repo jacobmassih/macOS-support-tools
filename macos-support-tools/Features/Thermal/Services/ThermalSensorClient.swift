@@ -363,11 +363,37 @@ struct SMCSensorScanner {
     }
 }
 
+/// Holds the discovered sensor set across polls. Discovery costs a full key-table walk, so it
+/// runs once; an empty sweep is deliberately not cached so a transient SMC failure can recover
+/// on the next poll instead of pinning the app to "unavailable" forever.
+final class SMCSensorCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cachedSensors: [SMCSensor]?
+
+    nonisolated init() {}
+
+    nonisolated func sensors(discover: () -> [SMCSensor]) -> [SMCSensor] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cachedSensors {
+            return cachedSensors
+        }
+
+        let discovered = discover()
+
+        if !discovered.isEmpty {
+            cachedSensors = discovered
+        }
+
+        return discovered
+    }
+}
+
 private final class SMCThermalSensorReader: @unchecked Sendable {
     nonisolated static let shared = SMCThermalSensorReader()
 
-    private let lock = NSLock()
-    private var cachedSensors: [SMCSensor]?
+    private let cache = SMCSensorCache()
 
     nonisolated func read() throws -> ThermalReading {
         guard MemoryLayout<SMCParamStruct>.stride == SMCParamStruct.kernelSize else {
@@ -396,27 +422,7 @@ private final class SMCThermalSensorReader: @unchecked Sendable {
         }
 
         let scanner = SMCSensorScanner(transport: Self.transport(connection: connection))
-        return scanner.reading(sensors: sensors(scanner: scanner))
-    }
-
-    /// Discovering which sensors a machine actually populates costs a full key-table walk, so
-    /// the result is cached. An empty sweep is not cached, leaving room to recover if the SMC
-    /// was momentarily unwilling to answer.
-    private nonisolated func sensors(scanner: SMCSensorScanner) -> [SMCSensor] {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if let cachedSensors {
-            return cachedSensors
-        }
-
-        let discovered = scanner.discoverSensors()
-
-        if !discovered.isEmpty {
-            cachedSensors = discovered
-        }
-
-        return discovered
+        return scanner.reading(sensors: cache.sensors { scanner.discoverSensors() })
     }
 
     private nonisolated static func transport(connection: io_connect_t) -> SMCTransport {

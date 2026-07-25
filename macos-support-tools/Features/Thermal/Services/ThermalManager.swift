@@ -55,15 +55,18 @@ final class ThermalManager {
 
     private let sensorClient: ThermalSensorClient
     private let userDefaults: UserDefaults
+    private let pollingInterval: Duration
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
 
     init(
         sensorClient: ThermalSensorClient = .live,
         userDefaults: UserDefaults = .standard,
-        startsPolling: Bool = true
+        startsPolling: Bool = true,
+        pollingInterval: Duration = ThermalManager.pollingInterval
     ) {
         self.sensorClient = sensorClient
         self.userDefaults = userDefaults
+        self.pollingInterval = pollingInterval
 
         userDefaults.register(defaults: [
             DefaultsKey.showTemperatureInMenuBar: false
@@ -143,7 +146,7 @@ final class ThermalManager {
 
             while !Task.isCancelled {
                 do {
-                    try await Task.sleep(for: Self.pollingInterval)
+                    try await Task.sleep(for: self?.pollingInterval ?? Self.pollingInterval)
                 } catch {
                     return
                 }

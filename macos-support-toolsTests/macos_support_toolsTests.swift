@@ -1136,13 +1136,174 @@ struct macos_support_toolsTests {
         #expect(scanner.reading(sensors: [sensor]).status == .unavailable)
     }
 
+    @Test func thermalSensorErrorsDescribeThemselves() {
+        #expect(ThermalSensorError.serviceUnavailable.errorDescription == "Temperature sensors are unavailable on this Mac.")
+        #expect(ThermalSensorError.connectionFailed(-536_870_174).errorDescription
+            == "Could not connect to temperature sensors. IOKit returned -536870174.")
+        #expect(ThermalSensorError.unsupportedLayout.errorDescription
+            == "Temperature sensors could not be read because the SMC request layout is unsupported.")
+    }
+
+    @Test func smcSensorCacheDiscoversOnceButRetriesAfterEmptySweep() {
+        let cache = SMCSensorCache()
+        let sensor = SMCSensor(
+            key: SMCDecoder.key("Tp09"),
+            role: .cpu,
+            info: SMCKeyInfo(dataSize: 4, dataType: SMCDecoder.key("flt "))
+        )
+
+        var emptySweeps = 0
+        #expect(cache.sensors { emptySweeps += 1; return [] }.isEmpty)
+        #expect(cache.sensors { emptySweeps += 1; return [] }.isEmpty)
+        // An empty sweep must not be cached, or a transient SMC failure would be permanent.
+        #expect(emptySweeps == 2)
+
+        var sweeps = 0
+        #expect(cache.sensors { sweeps += 1; return [sensor] } == [sensor])
+        #expect(cache.sensors { sweeps += 1; return [sensor] } == [sensor])
+        #expect(sweeps == 1)
+    }
+
+    @Test func smcSensorScannerReturnsNoKeyCountWhenTableReadFails() {
+        // Key info for `#KEY` resolves, but the follow-up byte read does not.
+        let scanner = SMCSensorScanner(transport: SMCTransport { input in
+            guard input.data8 == 9 else { return nil }
+            var output = SMCParamStruct()
+            output.keyInfo = SMCKeyInfo(dataSize: 4, dataType: SMCDecoder.key("ui32"))
+            return output
+        })
+
+        #expect(scanner.keyCount() == nil)
+        #expect(scanner.discoverSensors().isEmpty)
+    }
+
+    /// `.live` talks to real hardware, which a CI VM may not expose. Either outcome is fine;
+    /// what this pins down is that the IOKit path runs end to end without trapping and never
+    /// reports a temperature outside a believable range.
+    @Test func liveThermalSensorClientReadsOrReportsUnavailable() async {
+        do {
+            let reading = try await ThermalSensorClient.live.read()
+
+            switch reading.status {
+            case .available:
+                #expect(reading.hasAnyTemperature)
+                for value in [reading.cpuCelsius, reading.gpuCelsius].compactMap({ $0 }) {
+                    #expect(SMCDecoder.isPlausibleTemperature(value))
+                }
+            case .unavailable:
+                #expect(!reading.hasAnyTemperature)
+                #expect(reading.lastError != nil)
+            case .idle, .failed:
+                Issue.record("live read returned an unexpected status: \(reading.status)")
+            }
+        } catch let error as ThermalSensorError {
+            #expect(error.errorDescription != nil)
+        } catch {
+            Issue.record("live read threw an unexpected error: \(error)")
+        }
+    }
+
     @MainActor
-    @Test func thermalSettingsViewRendersReadingAndErrorStates() {
-        let available = ThermalManager(
+    @Test func thermalManagerDescribesEachReadingState() {
+        let manager = ThermalManager(
             sensorClient: .mock { .idle },
             userDefaults: makeIsolatedUserDefaults(),
             startsPolling: false
         )
+
+        #expect(manager.statusDescription == "Temperature display disabled")
+        #expect(manager.lastUpdatedDescription == "Never")
+
+        manager.showTemperatureInMenuBar = true
+        #expect(manager.statusDescription == "Waiting for temperature reading")
+        #expect(manager.menuBarTitle == "Temp --")
+    }
+
+    @MainActor
+    @Test func thermalManagerReportsAvailableStaleAndUnavailableStates() async {
+        let fresh = ThermalManager(
+            sensorClient: .mock {
+                ThermalReading(cpuCelsius: 61, gpuCelsius: 55, lastUpdated: Date(), status: .available, lastError: nil)
+            },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        fresh.showTemperatureInMenuBar = true
+        await fresh.refresh()
+
+        #expect(fresh.statusDescription == "Temperature sensors available")
+        #expect(fresh.menuBarTitle == "CPU 61°C  GPU 55°C")
+        #expect(fresh.lastUpdatedDescription != "Never")
+
+        let stale = ThermalManager(
+            sensorClient: .mock {
+                ThermalReading(
+                    cpuCelsius: 61,
+                    gpuCelsius: 55,
+                    lastUpdated: Date().addingTimeInterval(-ThermalManager.staleInterval - 10),
+                    status: .available,
+                    lastError: nil
+                )
+            },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        await stale.refresh()
+        #expect(stale.statusDescription == "Temperature reading stale")
+
+        let unavailable = ThermalManager(
+            sensorClient: .mock { SMCDecoder.reading(cpuSamples: [], gpuSamples: []) },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        await unavailable.refresh()
+        #expect(unavailable.statusDescription == "Temperature sensors unavailable")
+    }
+
+    /// Enabling the toggle must start a repeating poll, and disabling it must stop it and
+    /// reset the reading rather than leave a stale temperature on screen.
+    @MainActor
+    @Test func thermalManagerPollsRepeatedlyWhileEnabled() async throws {
+        let counter = RefreshCounter()
+        let manager = ThermalManager(
+            sensorClient: .mock {
+                let count = await counter.increment()
+                return ThermalReading(
+                    cpuCelsius: Double(60 + count),
+                    gpuCelsius: nil,
+                    lastUpdated: Date(),
+                    status: .available,
+                    lastError: nil
+                )
+            },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: true,
+            pollingInterval: .milliseconds(20)
+        )
+
+        manager.showTemperatureInMenuBar = true
+
+        try await pollUntil { await counter.value >= 3 }
+        #expect(manager.reading.cpuCelsius != nil)
+
+        manager.showTemperatureInMenuBar = false
+        #expect(manager.reading == .idle)
+
+        let afterCancel = await counter.value
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(await counter.value <= afterCancel + 1)
+    }
+
+    @MainActor
+    @Test func thermalSettingsViewRendersReadingAndErrorStates() async {
+        let available = ThermalManager(
+            sensorClient: .mock {
+                ThermalReading(cpuCelsius: 61, gpuCelsius: 55, lastUpdated: Date(), status: .available, lastError: nil)
+            },
+            userDefaults: makeIsolatedUserDefaults(),
+            startsPolling: false
+        )
+        await available.refresh()
         renderForTests(ThermalSettingsView().environment(available))
 
         let failing = ThermalManager(
@@ -1150,6 +1311,9 @@ struct macos_support_toolsTests {
             userDefaults: makeIsolatedUserDefaults(),
             startsPolling: false
         )
+        // Refresh first so `reading.lastError` is populated and the warning row actually renders.
+        await failing.refresh()
+        #expect(failing.reading.lastError != nil)
         renderForTests(ThermalSettingsView().environment(failing))
     }
 
@@ -1179,6 +1343,34 @@ struct macos_support_toolsTests {
                 .environment(CleanupManager())
         )
     }
+}
+
+private actor RefreshCounter {
+    private(set) var value = 0
+
+    func increment() -> Int {
+        value += 1
+        return value
+    }
+}
+
+/// Waits for an asynchronous condition instead of sleeping a fixed amount, so the polling
+/// tests stay fast locally without becoming flaky on a loaded CI runner.
+private func pollUntil(
+    timeout: Duration = .seconds(5),
+    _ condition: () async -> Bool
+) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+
+    while ContinuousClock.now < deadline {
+        if await condition() {
+            return
+        }
+
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    Issue.record("condition was not met within \(timeout)")
 }
 
 /// Forces SwiftUI to evaluate a view's `body` so view code counts as executed.
