@@ -48,39 +48,24 @@ private struct DeviceCard: View {
                     .foregroundStyle(.green)
             }
 
-            Divider()
+            ForEach(MouseButtonType.allCases, id: \.self) { buttonType in
+                Divider()
 
-            SettingToggleRow(
-                title: "Button 4",
-                subtitle: "Enable handling for the forward side button.",
-                systemImage: "arrow.right.circle",
-                isOn: buttonEnabledBinding(.button4)
-            )
+                SettingToggleRow(
+                    title: buttonType.title,
+                    subtitle: buttonType.subtitle,
+                    systemImage: buttonType.systemImage,
+                    isOn: buttonEnabledBinding(buttonType)
+                )
 
-            Picker("Button 4 action", selection: buttonActionBinding(.button4)) {
-                ForEach(MouseButtonAction.allCases, id: \.self) { action in
-                    Text(action.displayName).tag(action)
+                Picker("\(buttonType.title) action", selection: buttonActionBinding(buttonType)) {
+                    ForEach(MouseButtonAction.allCases, id: \.self) { action in
+                        Text(action.displayName).tag(action)
+                    }
                 }
+                .pickerStyle(.menu)
+                .disabled(!currentDeviceValue(for: buttonType))
             }
-            .pickerStyle(.menu)
-            .disabled(!currentDeviceValue(for: .button4))
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Button 5",
-                subtitle: "Enable handling for the back side button.",
-                systemImage: "arrow.left.circle",
-                isOn: buttonEnabledBinding(.button5)
-            )
-
-            Picker("Button 5 action", selection: buttonActionBinding(.button5)) {
-                ForEach(MouseButtonAction.allCases, id: \.self) { action in
-                    Text(action.displayName).tag(action)
-                }
-            }
-            .pickerStyle(.menu)
-            .disabled(!currentDeviceValue(for: .button5))
         }
     }
 
@@ -115,6 +100,29 @@ private struct DeviceCard: View {
         switch buttonType {
         case .button4: return currentDevice.button4Action
         case .button5: return currentDevice.button5Action
+        }
+    }
+}
+
+private extension MouseButtonType {
+    var title: String {
+        switch self {
+        case .button4: return "Button 4"
+        case .button5: return "Button 5"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .button4: return "Enable handling for the forward side button."
+        case .button5: return "Enable handling for the back side button."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .button4: return "arrow.right.circle"
+        case .button5: return "arrow.left.circle"
         }
     }
 }
