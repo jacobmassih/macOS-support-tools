@@ -88,23 +88,17 @@ jobs:
       - name: Check changed-line coverage
         run: |
           set +e
-          # Exclude layers that cannot execute in a headless CI run, so the
-          # 80% gate measures only code that unit tests can actually reach:
-          #   - SwiftUI view bodies: no UI host renders them under xcodebuild test
-          #   - CGEvent/IOKit event-tap plumbing: requires Accessibility
-          #     permission the runner cannot grant, so the taps never fire
-          # Testable logic (e.g. MouseManager device handling, KeyboardDebounceFilter)
-          # stays gated.
           diff-cover coverage/cobertura.xml \
             --compare-branch="origin/${{ github.base_ref }}" \
             --fail-under=80 \
             --show-uncovered \
-            --exclude '*/Views/*' \
-            --exclude '*View.swift' \
-            --exclude '*/InputEvents/*' \
-            --exclude '*EventTap.swift' \
-            --exclude '*KeyboardManager.swift' \
-            --exclude '*HIDMouseDeviceMonitor.swift' \
+            --exclude \
+              '*/Views/*' \
+              '*View.swift' \
+              '*/InputEvents/*' \
+              '*EventTap.swift' \
+              '*KeyboardManager.swift' \
+              '*HIDMouseDeviceMonitor.swift' \
             --format markdown:coverage/diff-cover.md
           status=$?
 
