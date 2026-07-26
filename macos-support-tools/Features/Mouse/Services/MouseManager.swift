@@ -18,17 +18,17 @@ import Observation
         accessibilityManager.isAccessibilityEnabled
     }
     var tapStatus = "Inactive"
-    var mouseButtonsEnabled = true {
+    var mouseButtonsEnabled: Bool {
         didSet {
             userDefaults.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
         }
     }
-    var naturalScrollEnabled = true {
+    var naturalScrollEnabled: Bool {
         didSet {
             userDefaults.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
         }
     }
-    var citrixPassthroughEnabled = true {
+    var citrixPassthroughEnabled: Bool {
         didSet {
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
@@ -52,11 +52,6 @@ import Observation
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityManager = accessibilityManager
-        self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
-        self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
-            self?.handleAccessibilityPermissionDidChange()
-        }
 
         userDefaults.register(defaults: [
             DefaultsKey.mouseButtonsEnabled: true,
@@ -64,11 +59,21 @@ import Observation
             DefaultsKey.citrixPassthroughEnabled: true
         ])
 
-        loadDeviceSettings()
+        // These are initialised, not assigned, so the `didSet` observers stay
+        // silent: assigning would write the registered fallbacks back into the
+        // persistent domain and turn a code-owned default into a stored value
+        // the user never chose.
+        self.naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
+        self.mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
+        self.citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
 
-        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
-        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
-        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
+        self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
+        self.eventTapController = MouseEventTapController(manager: self)
+        self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
+            self?.handleAccessibilityPermissionDidChange()
+        }
+
+        loadDeviceSettings()
         updateTapStatus()
     }
 
