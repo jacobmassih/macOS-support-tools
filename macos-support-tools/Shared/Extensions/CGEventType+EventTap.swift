@@ -5,11 +5,12 @@ extension CGEventType {
     /// of its event mask, after disabling the tap; the callback must re-enable
     /// the tap or it stays dead for the rest of the process lifetime.
     ///
-    /// Only use this where both types warrant the same response. The two differ:
-    /// `.tapDisabledByTimeout` means the callback stalled, while
-    /// `.tapDisabledByUserInput` is user-initiated. `keyboardEventCallback`
-    /// deliberately branches on them separately, because blindly re-arming a tap
-    /// that is suppressing every key would defeat the user's way out.
+    /// Use this to recognise a notification, not to decide how to answer one. The
+    /// two differ: `.tapDisabledByTimeout` means the callback stalled, while
+    /// `.tapDisabledByUserInput` is user-initiated. Every caller branches on the
+    /// specific type afterwards, because blindly re-arming a tap that suppresses
+    /// every key would defeat the user's way out, and because only a stall should
+    /// count against the timeout budget in `EventTapTimeoutBreaker`.
     var isTapDisabledEvent: Bool {
         self == .tapDisabledByTimeout || self == .tapDisabledByUserInput
     }

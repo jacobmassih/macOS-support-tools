@@ -17,20 +17,23 @@ import Observation
     var isAccessibilityEnabled: Bool {
         accessibilityManager.isAccessibilityEnabled
     }
-    var tapStatus = "Inactive"
+    var tapStatus = MouseTapStatus.idle
     var mouseButtonsEnabled = true {
         didSet {
             userDefaults.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
+            syncTapConfiguration()
         }
     }
     var naturalScrollEnabled = true {
         didSet {
             userDefaults.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
+            syncTapConfiguration()
         }
     }
     var citrixPassthroughEnabled = true {
         didSet {
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
+            syncTapConfiguration()
         }
     }
 
@@ -42,7 +45,7 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
-    @ObservationIgnored private var eventTapController: MouseEventTapController!
+    @ObservationIgnored private(set) var eventTapController: MouseEventTapController!
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -53,9 +56,20 @@ import Observation
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityManager = accessibilityManager
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
-        self.eventTapController = MouseEventTapController(manager: self)
+        self.eventTapController = MouseEventTapController { [weak self] in
+            // A tap can be left disabled from the tap thread, so bring the news
+            // back to the main thread before touching observable state.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.updateTapStatus()
+                }
+            }
+        }
         self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
             self?.handleAccessibilityPermissionDidChange()
+        }
+        self.citrixMonitor.onCitrixActiveChange = { [weak self] in
+            self?.syncTapConfiguration()
         }
 
         userDefaults.register(defaults: [
@@ -76,8 +90,7 @@ import Observation
         if let accessibilityPermissionObserverID {
             accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
-        eventTapController.disableScrollEventTap()
-        eventTapController.disableButtonEventTap()
+        eventTapController.disableAllTaps()
         deviceMonitor.stop()
     }
 
@@ -86,18 +99,12 @@ import Observation
 
         hasStartedSystemServices = true
         deviceMonitor.start()
-        eventTapController.setupScrollEventTap()
-        eventTapController.setupButtonEventTap()
-        updateTapStatus()
+        syncTapConfiguration()
     }
 
     private func handleAccessibilityPermissionDidChange() {
+        syncTapConfiguration()
         updateTapStatus()
-
-        if hasStartedSystemServices && isAccessibilityEnabled {
-            eventTapController.setupScrollEventTap()
-            eventTapController.setupButtonEventTap()
-        }
     }
 
     func updateButtonSettings(for deviceId: String, buttonType: MouseButtonType, enabled: Bool) {
@@ -113,6 +120,7 @@ import Observation
         deviceSettings[deviceId] = device
         updateConnectedDevice(device)
         saveDeviceSettings()
+        syncTapConfiguration()
     }
 
     func updateButtonAction(for deviceId: String, buttonType: MouseButtonType, action: MouseButtonAction) {
@@ -128,6 +136,7 @@ import Observation
         deviceSettings[deviceId] = device
         updateConnectedDevice(device)
         saveDeviceSettings()
+        syncTapConfiguration()
     }
 
     internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
@@ -156,41 +165,82 @@ import Observation
         connectedDevices.append(restoredDevice)
         deviceSettings[device.id] = restoredDevice
         saveDeviceSettings()
+        syncTapConfiguration()
     }
 
     internal func removeDevice(_ device: MouseDevice) {
         connectedDevices.removeAll { $0.id == device.id }
+        syncTapConfiguration()
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
         connectedDevices.removeAll()
         devices.forEach(addDevice)
+        syncTapConfiguration()
     }
-    
+
     internal func getCurrentActiveDevice() -> MouseDevice? {
         connectedDevices.first
     }
 
     internal func shouldReverseScroll() -> Bool {
-        isAnyExternalMouseConnected && !naturalScrollEnabled
-    }
-
-    internal func reenableScrollEventTap() {
-        eventTapController.reenableScrollEventTap()
-    }
-
-    internal func reenableButtonEventTap() {
-        eventTapController.reenableButtonEventTap()
+        isScrollTapNeeded
     }
 
     internal func updateTapStatus() {
         if !isAccessibilityEnabled {
-            tapStatus = "Inactive - Accessibility permission required"
+            tapStatus = eventTapController.needsAnyMouseEventTap ? .accessibilityRequired : .idle
+        } else if eventTapController.isDisabledByRepeatedTimeouts {
+            tapStatus = .disabledAfterRepeatedTimeouts
+        } else if !eventTapController.needsAnyMouseEventTap {
+            tapStatus = .idle
         } else if eventTapController.hasRequiredMouseEventTaps {
-            tapStatus = "Active"
+            tapStatus = .active
         } else {
-            tapStatus = "Inactive - Event tap unavailable"
+            tapStatus = .unavailable
         }
+    }
+
+    /// A tap only needs to see scroll events while it would actually rewrite one.
+    private var isScrollTapNeeded: Bool {
+        isAnyExternalMouseConnected && !naturalScrollEnabled
+    }
+
+    /// Likewise for side buttons: with no connected device configured to override
+    /// one, the tap would forward every click untouched.
+    private var isButtonTapNeeded: Bool {
+        mouseButtonsEnabled && connectedDevices.contains { $0.button4Enabled || $0.button5Enabled }
+    }
+
+    /// Republishes what the tap callbacks read and matches the installed taps to
+    /// what the enabled features need. Every input to either decision calls this.
+    private func syncTapConfiguration() {
+        eventTapController.updateSettings(mouseTapSettings())
+
+        guard hasStartedSystemServices else { return }
+
+        eventTapController.updateTaps(
+            scrollTapNeeded: isScrollTapNeeded,
+            buttonTapNeeded: isButtonTapNeeded,
+            isAccessibilityEnabled: isAccessibilityEnabled
+        )
+        updateTapStatus()
+    }
+
+    private func mouseTapSettings() -> MouseTapSettings {
+        let activeDevice = getCurrentActiveDevice()
+        let isCitrixPassthroughActive = citrixPassthroughEnabled && citrixMonitor.isCitrixActive
+        let canOverrideButtons = mouseButtonsEnabled && !isCitrixPassthroughActive
+
+        return MouseTapSettings(
+            shouldReverseScroll: isScrollTapNeeded,
+            button4Action: canOverrideButtons && activeDevice?.button4Enabled == true
+                ? activeDevice?.button4Action
+                : nil,
+            button5Action: canOverrideButtons && activeDevice?.button5Enabled == true
+                ? activeDevice?.button5Action
+                : nil
+        )
     }
 
     private func updateConnectedDevice(_ device: MouseDevice) {

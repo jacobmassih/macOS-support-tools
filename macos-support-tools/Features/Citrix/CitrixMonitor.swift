@@ -3,8 +3,14 @@ import AppKit
 
 @Observable class CitrixMonitor {
     private(set) var isCitrixActive: Bool = false
+
+    /// Called on the main thread when the active state changes. The mouse tap
+    /// callbacks read a published snapshot rather than this object, so passthrough
+    /// only follows the frontmost app if someone republishes on the change.
+    @ObservationIgnored var onCitrixActiveChange: (() -> Void)?
+
     private var observer: NSObjectProtocol?
-    
+
     init() {
         startMonitoring()
     }
@@ -35,7 +41,11 @@ import AppKit
     }
     
     private func updateCitrixState() {
-        isCitrixActive = checkIfCitrixIsActive()
+        let isActive = checkIfCitrixIsActive()
+        guard isActive != isCitrixActive else { return }
+
+        isCitrixActive = isActive
+        onCitrixActiveChange?()
     }
     
     private func checkIfCitrixIsActive() -> Bool {

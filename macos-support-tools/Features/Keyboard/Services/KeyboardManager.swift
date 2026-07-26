@@ -31,6 +31,9 @@ import Observation
                 keyboardDebounceDelayMilliseconds,
                 forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
             )
+            // The tap callback reads a published snapshot rather than this
+            // property, so a new delay only takes effect once it is republished.
+            updateKeyboardEventTap()
         }
     }
     var keyboardBlocked = false {
@@ -44,8 +47,7 @@ import Observation
     @ObservationIgnored private let accessibilityManager: AccessibilityManager
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
-    @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
-    @ObservationIgnored private let keyboardTap = EventTap(label: "keyboard")
+    @ObservationIgnored private(set) var eventTapController: KeyboardEventTapController!
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -53,6 +55,15 @@ import Observation
     ) {
         self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
+        self.eventTapController = KeyboardEventTapController { [weak self] in
+            // Hop to the main thread: the release runs on the tap thread, and
+            // clearing the flag tears that very tap down.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.keyboardBlocked = false
+                }
+            }
+        }
         accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
             self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
@@ -72,7 +83,7 @@ import Observation
         if let accessibilityPermissionObserverID {
             accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
-        keyboardTap.uninstall()
+        eventTapController.uninstall()
     }
 
     func startSystemServices() {
@@ -88,17 +99,24 @@ import Observation
     }
 
     private func updateKeyboardEventTap() {
+        let settings = keyboardTapSettings()
+        eventTapController.updateSettings(settings)
+
         guard hasStartedSystemServices else { return }
 
-        guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {
-            keyboardTap.uninstall()
+        guard settings.needsEventTap && isAccessibilityEnabled else {
+            eventTapController.uninstall()
             return
         }
 
-        keyboardTap.install(
-            eventMask: keyboardEventMaskForCurrentFeatures(),
-            callback: keyboardEventCallback,
-            target: self
+        eventTapController.install(eventMask: keyboardEventMaskForCurrentFeatures())
+    }
+
+    private func keyboardTapSettings() -> KeyboardTapSettings {
+        KeyboardTapSettings(
+            isBlocked: keyboardBlocked,
+            isDebounceEnabled: keyboardDebounceEnabled,
+            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
         )
     }
 
@@ -113,87 +131,9 @@ import Observation
         return CGEventMask(eventMask)
     }
 
-    fileprivate func reenableKeyboardEventTap() {
-        keyboardTap.reenable()
-    }
-
-    /// `.tapDisabledByUserInput` is user-initiated, so it is the one way out of a
-    /// full keyboard block that does not depend on the mouse. Releasing the block
-    /// takes priority over keeping the tap alive; silently re-arming it would
-    /// defeat the escape. Debounce is not a lockout, so it just gets its tap back.
-    fileprivate func handleUserInitiatedTapDisable() {
-        guard keyboardBlocked else {
-            print("[KeyboardManager] Keyboard tap disabled by user input; re-enabling for debounce.")
-            reenableKeyboardEventTap()
-            return
-        }
-
-        print("[KeyboardManager] Keyboard tap disabled by user input; releasing keyboard block.")
-
-        // Hop off the tap callback: clearing the flag tears this tap down, and
-        // invalidating a mach port from inside its own callout is best avoided.
-        DispatchQueue.main.async { [weak self] in
-            self?.keyboardBlocked = false
-        }
-    }
-
-    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
-        if keyboardBlocked {
-            return true
-        }
-
-        guard keyboardDebounceEnabled else {
-            return false
-        }
-
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
-        guard type == .keyDown else {
-            return false
-        }
-
-        let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        return keyboardDebounceFilter.shouldSuppressKeyDown(
-            keyCode: keyCode,
-            timestamp: event.timestamp,
-            isAutorepeat: isAutorepeat,
-            debounceNanoseconds: UInt64(keyboardDebounceDelayMilliseconds * 1_000_000)
-        )
-    }
-
     private func resetKeyboardDebounceFilter() {
-        keyboardDebounceFilter.reset()
+        eventTapController.resetDebounceFilter()
     }
-}
-
-func keyboardEventCallback(
-    proxy: CGEventTapProxy,
-    type: CGEventType,
-    event: CGEvent,
-    refcon: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    guard let refcon else {
-        return Unmanaged.passRetained(event)
-    }
-
-    let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
-
-    if type == .tapDisabledByUserInput {
-        keyboardManager.handleUserInitiatedTapDisable()
-        return Unmanaged.passRetained(event)
-    }
-
-    if type == .tapDisabledByTimeout {
-        print("[KeyboardManager] Keyboard tap disabled by timeout; re-enabling.")
-        keyboardManager.reenableKeyboardEventTap()
-        return Unmanaged.passRetained(event)
-    }
-
-    if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
-        return nil
-    }
-
-    return Unmanaged.passRetained(event)
 }
 
 extension Comparable {

@@ -4,6 +4,16 @@ struct OverviewSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
     let launchAtLogin: LaunchAtLogin
 
+    /// Idle is not a fault: the taps are torn down whenever no feature needs one,
+    /// so it reads like the other "nothing connected" pills rather than a warning.
+    private var eventTapTint: Color {
+        switch mouseManager.tapStatus {
+        case .active: .green
+        case .idle: .secondary
+        default: .orange
+        }
+    }
+
     var body: some View {
         @Bindable var mouseManager = mouseManager
 
@@ -25,9 +35,9 @@ struct OverviewSettingsView: View {
 
                 StatusPill(
                     title: "Event Tap",
-                    value: mouseManager.tapStatus,
+                    value: mouseManager.tapStatus.displayName,
                     systemImage: "dot.radiowaves.left.and.right",
-                    tint: mouseManager.tapStatus == "Active" ? .green : .orange
+                    tint: eventTapTint
                 )
 
                 VerticalDivider()

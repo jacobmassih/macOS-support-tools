@@ -39,7 +39,7 @@ struct MouseSettingsView: View {
             Divider()
 
             LabeledContent("Tap status") {
-                Text(mouseManager.tapStatus)
+                Text(mouseManager.tapStatus.displayName)
                     .foregroundStyle(.secondary)
             }
 
