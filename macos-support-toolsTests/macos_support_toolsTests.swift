@@ -810,6 +810,73 @@ struct macos_support_toolsTests {
         #expect(persistedDevice.button4Action == .middleClick)
     }
 
+    @Test func musicLaunchInterceptorRedirectsAppleMusicWhenEnabledAndSpotifyInstalled() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .redirectToSpotify)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresLaunchesWhenDisabled() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: false,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresNonMusicLaunches() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: "com.apple.Safari",
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorLeavesMusicAloneWhenSpotifyMissing() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: true,
+            isSpotifyInstalled: false
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresMissingBundleIdentifier() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: nil,
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorDefaultsToDisabledAndPersistsEnabledState() throws {
+        let suiteName = "MusicLaunchInterceptorPersistenceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let interceptor = MusicLaunchInterceptor(userDefaults: userDefaults)
+        #expect(!interceptor.isEnabled)
+
+        interceptor.isEnabled = true
+        #expect(userDefaults.bool(forKey: MusicLaunchInterceptor.DefaultsKey.isEnabled))
+
+        let reloaded = MusicLaunchInterceptor(userDefaults: userDefaults)
+        #expect(reloaded.isEnabled)
+    }
+
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
         let moved = CleanupItem(url: URL(filePath: "/tmp/moved"), size: 10, modifiedDate: nil)
         let skipped = CleanupItem(url: URL(filePath: "/tmp/skipped"), size: 20, modifiedDate: nil)
