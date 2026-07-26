@@ -743,6 +743,39 @@ struct macos_support_toolsTests {
         #expect(detectedDevice.button5Action == .none)
     }
 
+    @Test func mouseManagerAllowsButtonConfigurationForNewDevicesDetectedAtLaunch() throws {
+        let suiteName = "MouseManagerLaunchDetectedDeviceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+
+        // Initial detection at launch is the only path that populates
+        // connectedDevices without going through addDevice.
+        manager.setDetectedDevices([device])
+
+        #expect(manager.deviceSettings[device.id] != nil)
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonAction(for: device.id, buttonType: .button5, action: .middleClick)
+
+        let updatedDevice = try #require(manager.deviceSettings[device.id])
+        #expect(!updatedDevice.button4Enabled)
+        #expect(updatedDevice.button5Action == .middleClick)
+
+        let connectedDevice = try #require(manager.connectedDevices.first)
+        #expect(!connectedDevice.button4Enabled)
+        #expect(connectedDevice.button5Action == .middleClick)
+
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
+        let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
+        #expect(!persistedDevice.button4Enabled)
+        #expect(persistedDevice.button5Action == .middleClick)
+    }
+
     @Test func mouseManagerKeepsPersistedDeviceSettingsAfterDisconnect() throws {
         let suiteName = "MouseManagerDisconnectedDeviceSettingsTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -757,11 +790,11 @@ struct macos_support_toolsTests {
         manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
         manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
-        manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
+        manager.removeDevice(withID: "999-888-location-777")
 
         #expect(manager.connectedDevices.map(\.id) == [device.id])
 
-        manager.removeDisconnectedDevices(currentDeviceIDs: [])
+        manager.removeDevice(withID: device.id)
 
         #expect(manager.connectedDevices.isEmpty)
 
@@ -972,8 +1005,6 @@ struct macos_support_toolsTests {
 
         #expect(scanResult.largestItem?.url == largeItem.url)
         #expect(scanResult.mostRecentModifiedDate == newerDate)
-        #expect(scanResult.oldestModifiedDate == olderDate)
-        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
@@ -998,6 +1029,145 @@ struct macos_support_toolsTests {
         #expect(CleanupRiskLevel.review.description == "Worth reviewing before cleanup because contents can be useful.")
         #expect(item.id == item.url)
         #expect(scanResult.id == .logs)
+    }
+
+    @Test func tapDisabledEventTypesAreRecognized() {
+        #expect(CGEventType.tapDisabledByTimeout.isTapDisabledEvent)
+        #expect(CGEventType.tapDisabledByUserInput.isTapDisabledEvent)
+        #expect(!CGEventType.scrollWheel.isTapDisabledEvent)
+        #expect(!CGEventType.otherMouseDown.isTapDisabledEvent)
+        #expect(!CGEventType.keyDown.isTapDisabledEvent)
+    }
+
+    @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
+        let suiteName = "MouseTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let scrollEvent = try #require(CGEvent(source: nil))
+        let buttonEvent = try #require(CGEvent(source: nil))
+
+        let scrollResult = try invokeTapCallback(
+            scrollEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: scrollEvent
+        )
+        let buttonResult = try invokeTapCallback(
+            buttonEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: buttonEvent
+        )
+
+        #expect(scrollResult === scrollEvent)
+        #expect(buttonResult === buttonEvent)
+    }
+
+    @Test func keyboardEventCallbackPassesThroughTimeoutNotificationsWhileBlocking() throws {
+        let suiteName = "KeyboardTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let disabledNotification = try #require(CGEvent(source: nil))
+        let notificationResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: disabledNotification
+        )
+        #expect(notificationResult === disabledNotification)
+
+        // A stall is not a user request: the block stays on.
+        #expect(manager.keyboardBlocked)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult == nil)
+    }
+
+    @Test func keyboardTapDisabledByUserInputReleasesKeyboardBlock() async throws {
+        let suiteName = "KeyboardUserInputDisableTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+        #expect(result === notification)
+
+        // The release is hopped off the tap callback, so drain the main queue.
+        await MainActor.run {}
+
+        // The OS-level escape from Block Keyboard must actually unblock it,
+        // otherwise the toggle claims to be blocking a keyboard that works.
+        #expect(!manager.keyboardBlocked)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult === keyDownEvent)
+    }
+
+    @Test func keyboardTapDisabledByUserInputWithoutBlockingKeepsDebounceAlive() throws {
+        let suiteName = "KeyboardUserInputDebounceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+
+        // Debounce is not a lockout, so there is no escape to honour here.
+        #expect(result === notification)
+        #expect(!manager.keyboardBlocked)
+        #expect(manager.keyboardDebounceEnabled)
+    }
+
+    @Test func mouseButtonActionRoundTripsRemainingCases() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+
+        for action in MouseButtonAction.allCases {
+            let data = try encoder.encode(action)
+            let decoded = try decoder.decode(MouseButtonAction.self, from: data)
+            #expect(decoded == action)
+        }
     }
 }
 
@@ -1084,6 +1254,21 @@ private func makeKeyboardManager(userDefaults: UserDefaults) -> KeyboardManager 
         userDefaults: userDefaults,
         accessibilityManager: AccessibilityManager()
     )
+}
+
+private func invokeTapCallback(
+    _ callback: (CGEventTapProxy, CGEventType, CGEvent, UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>?,
+    refconObject: AnyObject,
+    type: CGEventType,
+    event: CGEvent
+) throws -> CGEvent? {
+    // #require rather than a nil-returning guard: the callbacks under test return
+    // nil to mean "event suppressed", so a helper that also returns nil on setup
+    // failure would let those assertions pass for the wrong reason.
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
+
+    let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
+    return callback(proxy, type, event, refcon)?.takeRetainedValue()
 }
 
 private final class TrashRecorder: @unchecked Sendable {

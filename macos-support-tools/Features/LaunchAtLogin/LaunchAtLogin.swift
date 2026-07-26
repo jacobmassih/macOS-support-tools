@@ -9,15 +9,10 @@ final class LaunchAtLogin {
     init() { refresh() }
     
     func refresh() {
-        if #available(macOS 13.0, *) {
-            isEnabled = SMAppService.mainApp.status == .enabled
-        } else {
-            isEnabled = false
-        }
+        isEnabled = SMAppService.mainApp.status == .enabled
     }
-    
+
     func setEnabled(_ enabled: Bool) {
-        guard #available(macOS 13.0, *) else { return }
         do {
             if enabled {
                 try SMAppService.mainApp.register()

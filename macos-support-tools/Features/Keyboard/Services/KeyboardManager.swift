@@ -45,9 +45,7 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
-    @ObservationIgnored private var keyboardEventTap: CFMachPort?
-    @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
-    @ObservationIgnored private var keyboardEventMask: CGEventMask?
+    @ObservationIgnored private let keyboardTap = EventTap(label: "keyboard")
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -74,7 +72,7 @@ import Observation
         if let accessibilityPermissionObserverID {
             accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
-        disableKeyboardEventTap()
+        keyboardTap.uninstall()
     }
 
     func startSystemServices() {
@@ -93,17 +91,15 @@ import Observation
         guard hasStartedSystemServices else { return }
 
         guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {
-            disableKeyboardEventTap()
+            keyboardTap.uninstall()
             return
         }
 
-        let eventMask = keyboardEventMaskForCurrentFeatures()
-        if keyboardEventTap == nil {
-            setupKeyboardEventTap(eventMask: eventMask)
-        } else if keyboardEventMask != eventMask {
-            disableKeyboardEventTap()
-            setupKeyboardEventTap(eventMask: eventMask)
-        }
+        keyboardTap.install(
+            eventMask: keyboardEventMaskForCurrentFeatures(),
+            callback: keyboardEventCallback,
+            target: self
+        )
     }
 
     private func keyboardEventMaskForCurrentFeatures() -> CGEventMask {
@@ -117,47 +113,27 @@ import Observation
         return CGEventMask(eventMask)
     }
 
-    private func setupKeyboardEventTap(eventMask: CGEventMask) {
-        guard keyboardEventTap == nil else { return }
-
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-
-        keyboardEventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: eventMask,
-            callback: keyboardEventCallback,
-            userInfo: context
-        )
-
-        guard let keyboardEventTap else {
-            print("Failed to create keyboard event tap. App may need accessibility permissions.")
-            return
-        }
-
-        keyboardRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyboardEventTap, 0)
-        guard let keyboardRunLoopSource else {
-            disableKeyboardEventTap()
-            return
-        }
-
-        keyboardEventMask = eventMask
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
+    fileprivate func reenableKeyboardEventTap() {
+        keyboardTap.reenable()
     }
 
-    private func disableKeyboardEventTap() {
-        if let keyboardEventTap {
-            CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
-            CFMachPortInvalidate(keyboardEventTap)
-            self.keyboardEventTap = nil
+    /// `.tapDisabledByUserInput` is user-initiated, so it is the one way out of a
+    /// full keyboard block that does not depend on the mouse. Releasing the block
+    /// takes priority over keeping the tap alive; silently re-arming it would
+    /// defeat the escape. Debounce is not a lockout, so it just gets its tap back.
+    fileprivate func handleUserInitiatedTapDisable() {
+        guard keyboardBlocked else {
+            print("[KeyboardManager] Keyboard tap disabled by user input; re-enabling for debounce.")
+            reenableKeyboardEventTap()
+            return
         }
-        keyboardEventMask = nil
 
-        if let keyboardRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-            self.keyboardRunLoopSource = nil
+        print("[KeyboardManager] Keyboard tap disabled by user input; releasing keyboard block.")
+
+        // Hop off the tap callback: clearing the flag tears this tap down, and
+        // invalidating a mach port from inside its own callout is best avoided.
+        DispatchQueue.main.async { [weak self] in
+            self?.keyboardBlocked = false
         }
     }
 
@@ -189,7 +165,7 @@ import Observation
     }
 }
 
-private func keyboardEventCallback(
+func keyboardEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
@@ -200,6 +176,17 @@ private func keyboardEventCallback(
     }
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    if type == .tapDisabledByUserInput {
+        keyboardManager.handleUserInitiatedTapDisable()
+        return Unmanaged.passRetained(event)
+    }
+
+    if type == .tapDisabledByTimeout {
+        print("[KeyboardManager] Keyboard tap disabled by timeout; re-enabling.")
+        keyboardManager.reenableKeyboardEventTap()
+        return Unmanaged.passRetained(event)
+    }
 
     if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil

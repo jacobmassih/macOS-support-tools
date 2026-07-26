@@ -49,11 +49,7 @@ struct KeyboardSettingsView: View {
 
         if !accessibilityManager.isAccessibilityEnabled {
             SettingsCard {
-                Button {
-                    accessibilityManager.refresh(prompt: true)
-                } label: {
-                    Label("Request Accessibility Access", systemImage: "lock.open")
-                }
+                AccessibilityAccessButton()
             }
         }
     }

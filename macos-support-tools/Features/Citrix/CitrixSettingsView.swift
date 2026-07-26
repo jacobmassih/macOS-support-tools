@@ -4,6 +4,8 @@ struct CitrixSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
 
     var body: some View {
+        @Bindable var mouseManager = mouseManager
+
         SettingsHeader(
             title: "Citrix",
             subtitle: "Control how mouse button handling behaves while Citrix Viewer is active."
@@ -14,11 +16,7 @@ struct CitrixSettingsView: View {
                 title: "Citrix compatibility",
                 subtitle: "When enabled, the app leaves side-button events untouched while Citrix Viewer is frontmost.",
                 systemImage: "rectangle.connected.to.line.below",
-                isOn: Binding {
-                    mouseManager.citrixPassthroughEnabled
-                } set: {
-                    mouseManager.citrixPassthroughEnabled = $0
-                }
+                isOn: $mouseManager.citrixPassthroughEnabled
             )
 
             Divider()

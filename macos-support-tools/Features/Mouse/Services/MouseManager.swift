@@ -13,7 +13,7 @@ import Observation
 
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
-    var isAnyExternalMouseConnected = false
+    var isAnyExternalMouseConnected: Bool { !connectedDevices.isEmpty }
     var isAccessibilityEnabled: Bool {
         accessibilityManager.isAccessibilityEnabled
     }
@@ -64,7 +64,6 @@ import Observation
             DefaultsKey.citrixPassthroughEnabled: true
         ])
 
-        print("[MouseManager] Initialized and starting up.")
         loadDeviceSettings()
 
         naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
@@ -79,7 +78,6 @@ import Observation
         }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        deviceMonitor.stopPolling()
         deviceMonitor.stop()
     }
 
@@ -91,7 +89,6 @@ import Observation
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
         updateTapStatus()
-        deviceMonitor.startPolling()
     }
 
     private func handleAccessibilityPermissionDidChange() {
@@ -126,8 +123,6 @@ import Observation
             device.button4Action = action
         case .button5:
             device.button5Action = action
-        default:
-            break
         }
 
         deviceSettings[deviceId] = device
@@ -160,31 +155,32 @@ import Observation
         let restoredDevice = restoredDeviceSettings(for: device)
         connectedDevices.append(restoredDevice)
         deviceSettings[device.id] = restoredDevice
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
 
     internal func removeDevice(withID id: String) {
         connectedDevices.removeAll { $0.id == id }
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
-        connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
+        connectedDevices.removeAll()
+        devices.forEach(addDevice)
     }
-
-    internal func removeDisconnectedDevices(currentDeviceIDs: Set<String>) {
-        connectedDevices.removeAll { !currentDeviceIDs.contains($0.id) }
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
-    }
-
+    
     internal func getCurrentActiveDevice() -> MouseDevice? {
         connectedDevices.first
     }
 
     internal func shouldReverseScroll() -> Bool {
         isAnyExternalMouseConnected && !naturalScrollEnabled
+    }
+
+    internal func reenableScrollEventTap() {
+        eventTapController.reenableScrollEventTap()
+    }
+
+    internal func reenableButtonEventTap() {
+        eventTapController.reenableButtonEventTap()
     }
 
     internal func updateTapStatus() {
@@ -202,14 +198,6 @@ import Observation
         connectedDevices[index] = device
     }
 
-    private func uniqueDevices(_ devices: [MouseDevice]) -> [MouseDevice] {
-        var seenIDs = Set<String>()
-
-        return devices.filter { device in
-            seenIDs.insert(device.id).inserted
-        }
-    }
-
     private func restoredDeviceSettings(for device: MouseDevice) -> MouseDevice {
         deviceSettings[device.id] ?? device
     }
@@ -220,12 +208,6 @@ import Observation
         }
 
         deviceSettings = savedSettings
-
-        for (index, device) in connectedDevices.enumerated() {
-            if let savedDevice = deviceSettings[device.id] {
-                connectedDevices[index] = savedDevice
-            }
-        }
     }
 
     private func saveDeviceSettings() {
