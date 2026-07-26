@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import IOKit.hid
@@ -1015,6 +1016,49 @@ struct macos_support_toolsTests {
             #expect(decoded == action)
         }
     }
+
+    @Test func launchAtLoginRefreshReflectsRegistrationState() {
+        let registration = LaunchAtLoginRegistrationStub()
+        let launchAtLogin = LaunchAtLogin(
+            notificationCenter: NotificationCenter(),
+            isRegistered: { registration.isRegistered }
+        )
+
+        #expect(!launchAtLogin.isEnabled)
+
+        registration.isRegistered = true
+        launchAtLogin.refresh()
+        #expect(launchAtLogin.isEnabled)
+
+        registration.isRegistered = false
+        launchAtLogin.refresh()
+        #expect(!launchAtLogin.isEnabled)
+    }
+
+    @MainActor
+    @Test func launchAtLoginRefreshesWhenAppBecomesActive() async {
+        let center = NotificationCenter()
+        let registration = LaunchAtLoginRegistrationStub()
+        let launchAtLogin = LaunchAtLogin(
+            notificationCenter: center,
+            isRegistered: { registration.isRegistered }
+        )
+
+        #expect(!launchAtLogin.isEnabled)
+
+        registration.isRegistered = true
+        center.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        for _ in 0..<200 where !launchAtLogin.isEnabled {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+
+        #expect(launchAtLogin.isEnabled)
+    }
+}
+
+private final class LaunchAtLoginRegistrationStub {
+    var isRegistered = false
 }
 
 private func makeMouseDevice(
