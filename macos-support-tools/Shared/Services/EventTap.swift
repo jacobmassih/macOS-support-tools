@@ -1,22 +1,46 @@
 import CoreGraphics
 import Foundation
+import os
 
 final class EventTap {
+    private static let logger = Logger(
+        subsystem: "com.mst.macos-support-tools",
+        category: "EventTap"
+    )
+
+    private let label: String
     private var machPort: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var runLoop: CFRunLoop?
+
+    private(set) var installedEventMask: CGEventMask?
 
     var isInstalled: Bool {
         machPort != nil
     }
 
+    /// - Parameter label: Human-readable tap name used in log messages.
+    init(label: String) {
+        self.label = label
+    }
+
+    deinit {
+        uninstall()
+    }
+
+    /// Installs the tap on the current run loop. `target` is passed unretained to the
+    /// callback as `refcon`, so it must outlive the tap. Installing over an existing
+    /// tap is a no-op when the mask matches and reinstalls the tap when it differs.
     @discardableResult
     func install(
         eventMask: CGEventMask,
         callback: CGEventTapCallBack,
-        userInfo: UnsafeMutableRawPointer?
+        target: AnyObject
     ) -> Bool {
-        guard machPort == nil else { return true }
+        if machPort != nil {
+            guard installedEventMask != eventMask else { return true }
+            uninstall()
+        }
 
         guard let machPort = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -24,13 +48,19 @@ final class EventTap {
             options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: callback,
-            userInfo: userInfo
+            userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(target).toOpaque())
         ) else {
+            Self.logger.error(
+                "Failed to create \(self.label, privacy: .public) event tap. App may need accessibility permissions."
+            )
             return false
         }
 
         guard let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, machPort, 0) else {
             CFMachPortInvalidate(machPort)
+            Self.logger.error(
+                "Failed to create run loop source for \(self.label, privacy: .public) event tap."
+            )
             return false
         }
 
@@ -39,6 +69,7 @@ final class EventTap {
         self.machPort = machPort
         self.runLoopSource = runLoopSource
         self.runLoop = runLoop
+        installedEventMask = eventMask
 
         CFRunLoopAddSource(runLoop, runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: machPort, enable: true)
@@ -64,5 +95,6 @@ final class EventTap {
 
         runLoopSource = nil
         runLoop = nil
+        installedEventMask = nil
     }
 }

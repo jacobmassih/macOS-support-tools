@@ -3,8 +3,8 @@ import CoreGraphics
 
 final class MouseEventTapController {
     private weak var manager: MouseManager?
-    private let scrollTap = EventTap()
-    private let buttonTap = EventTap()
+    private let scrollTap = EventTap(label: "scroll")
+    private let buttonTap = EventTap(label: "mouse button")
 
     var hasRequiredMouseEventTaps: Bool {
         scrollTap.isInstalled && buttonTap.isInstalled
@@ -18,8 +18,7 @@ final class MouseEventTapController {
         install(
             scrollTap,
             eventMask: CGEventMask(1 << CGEventType.scrollWheel.rawValue),
-            callback: scrollEventCallback,
-            failureMessage: "Failed to create event tap. App may need accessibility permissions."
+            callback: scrollEventCallback
         )
     }
 
@@ -37,8 +36,7 @@ final class MouseEventTapController {
             eventMask: CGEventMask(
                 (1 << CGEventType.otherMouseDown.rawValue) | (1 << CGEventType.otherMouseUp.rawValue)
             ),
-            callback: buttonEventCallback,
-            failureMessage: "Failed to create button event tap. App may need accessibility permissions."
+            callback: buttonEventCallback
         )
     }
 
@@ -53,22 +51,14 @@ final class MouseEventTapController {
     private func install(
         _ tap: EventTap,
         eventMask: CGEventMask,
-        callback: CGEventTapCallBack,
-        failureMessage: String
+        callback: CGEventTapCallBack
     ) {
         guard let manager, manager.isAccessibilityEnabled else {
             manager?.updateTapStatus()
             return
         }
 
-        guard !tap.isInstalled else { return }
-
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(manager).toOpaque())
-
-        guard tap.install(eventMask: eventMask, callback: callback, userInfo: context) else {
-            print(failureMessage)
-            return
-        }
+        guard tap.install(eventMask: eventMask, callback: callback, target: manager) else { return }
 
         manager.updateTapStatus()
     }
