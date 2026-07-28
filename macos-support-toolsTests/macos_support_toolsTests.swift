@@ -144,6 +144,101 @@ struct macos_support_toolsTests {
         #expect(result.items.first?.modifiedDate != nil)
         #expect(result.items.first?.isDirectory == false)
         #expect(result.totalBytes > 0)
+        #expect(result.accessState == .accessible)
+    }
+
+    @Test func cleanupScanReportsUnreadableDirectoryInsteadOfZeroBytes() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let payloadURL = rootURL.appending(path: "payload.bin")
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data(repeating: 0xCD, count: 32 * 1024).write(to: payloadURL)
+        // Mimic a TCC-protected location such as ~/.Trash, which the app can
+        // stat but not enumerate.
+        try fileManager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: rootURL.path)
+        defer {
+            try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: rootURL.path)
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.accessState == .permissionDenied)
+        #expect(result.accessState.requiresFullDiskAccess)
+        // The regression: an unreadable directory must not masquerade as empty.
+        #expect(!result.isEmpty)
+    }
+
+    @Test func cleanupScanTreatsReadableEmptyDirectoryAsAccessible() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.accessState == .accessible)
+        #expect(result.isEmpty)
+        #expect(result.totalBytes == 0)
+    }
+
+    @Test func cleanupScanKeepsReadablePathsWhenAnotherPathIsUnreadable() throws {
+        let fileManager = FileManager.default
+        let readableURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let blockedURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+        try fileManager.createDirectory(at: readableURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: blockedURL, withIntermediateDirectories: true)
+        try Data("payload".utf8).write(to: readableURL.appending(path: "payload.tmp"))
+        try Data(repeating: 0xEF, count: 4096).write(to: blockedURL.appending(path: "hidden.bin"))
+        try fileManager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: blockedURL.path)
+        defer {
+            try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blockedURL.path)
+            try? fileManager.removeItem(at: blockedURL)
+            try? fileManager.removeItem(at: readableURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [readableURL, blockedURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        // One blocked path must not discard candidates found in the others.
+        #expect(result.accessState == .permissionDenied)
+        #expect(result.itemCount == 1)
+        #expect(result.totalBytes > 0)
     }
 
     @Test @MainActor func cleanupCandidateRowsUseStoredDirectoryMetadata() {
