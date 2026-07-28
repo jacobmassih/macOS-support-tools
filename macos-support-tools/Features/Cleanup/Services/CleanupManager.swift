@@ -190,10 +190,12 @@ final class CleanupManager {
             .fileAllocatedSizeKey
         ]
 
+        // Hidden descendants count toward real disk usage, and cleanupItems(in:)
+        // already offers hidden top-level entries as candidates.
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsHiddenFiles]
+            options: []
         ) else {
             return fileSize(at: url)
         }

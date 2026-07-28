@@ -85,6 +85,38 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
+    @Test func cleanupScanIncludesHiddenDescendantSizes() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let candidateURL = rootURL.appending(path: "ProjectFixture", directoryHint: .isDirectory)
+        let hiddenDirectoryURL = candidateURL.appending(path: ".git", directoryHint: .isDirectory)
+        let hiddenPayloadURL = hiddenDirectoryURL.appending(path: "payload.bin")
+        let payload = Data(repeating: 0xEF, count: 32 * 1024)
+
+        try fileManager.createDirectory(at: hiddenDirectoryURL, withIntermediateDirectories: true)
+        try payload.write(to: hiddenPayloadURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.url.resolvingSymlinksInPath() == candidateURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.isDirectory == true)
+        #expect(result.totalBytes >= Int64(payload.count))
+    }
+
     @Test func cleanupScanIgnoresZeroByteCandidates() throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
