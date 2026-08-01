@@ -790,11 +790,11 @@ struct macos_support_toolsTests {
         manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
         manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
-        manager.removeDevice(makeMouseDevice(id: "999-888-location-777"))
+        manager.removeDevice(withID: "999-888-location-777")
 
         #expect(manager.connectedDevices.map(\.id) == [device.id])
 
-        manager.removeDevice(device)
+        manager.removeDevice(withID: device.id)
 
         #expect(manager.connectedDevices.isEmpty)
 
@@ -808,6 +808,160 @@ struct macos_support_toolsTests {
         let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
         #expect(!persistedDevice.button5Enabled)
         #expect(persistedDevice.button4Action == .middleClick)
+    }
+
+    @Test func mouseManagerRemoveDeviceByIDDropsMatchingDeviceAndIgnoresUnknownID() throws {
+        let suiteName = "MouseManagerRemoveDeviceByIDTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+        manager.addDevice(device)
+
+        // Removing an ID that was never added is a no-op.
+        manager.removeDevice(withID: "not-a-connected-device")
+        #expect(manager.connectedDevices.map(\.id) == [device.id])
+        #expect(manager.isAnyExternalMouseConnected)
+
+        manager.removeDevice(withID: device.id)
+        #expect(manager.connectedDevices.isEmpty)
+        #expect(!manager.isAnyExternalMouseConnected)
+    }
+
+    @Test func scrollReversalPolicyReversesDiscreteWheelDeltas() {
+        let descriptor = makeScrollEventDescriptor(vertical: 3, horizontal: -2)
+
+        let reversal = ScrollReversalPolicy.reversal(for: descriptor)
+
+        #expect(reversal?.deltas == ScrollWheelDeltas(vertical: -3, horizontal: 2))
+        #expect(reversal?.pointDeltas == nil)
+    }
+
+    @Test func scrollReversalPolicyReversesPointDeltasWhenPresent() {
+        let descriptor = makeScrollEventDescriptor(
+            vertical: 1,
+            horizontal: 0,
+            pointVertical: 10,
+            pointHorizontal: -4
+        )
+
+        let reversal = ScrollReversalPolicy.reversal(for: descriptor)
+
+        #expect(reversal?.deltas == ScrollWheelDeltas(vertical: -1, horizontal: 0))
+        #expect(reversal?.pointDeltas == ScrollWheelDeltas(vertical: -10, horizontal: 4))
+    }
+
+    @Test func scrollReversalPolicySkipsTrackpadPhases() {
+        let scrollPhase = makeScrollEventDescriptor(vertical: 3, horizontal: 0, scrollPhase: 1)
+        let momentumPhase = makeScrollEventDescriptor(vertical: 3, horizontal: 0, momentumPhase: 1)
+
+        #expect(ScrollReversalPolicy.reversal(for: scrollPhase) == nil)
+        #expect(ScrollReversalPolicy.reversal(for: momentumPhase) == nil)
+    }
+
+    @Test func scrollReversalPolicySkipsSubWheelSizedDeltas() {
+        // Whole-number, but smaller than one wheel click.
+        let tinyDelta = makeScrollEventDescriptor(vertical: 0, horizontal: 0)
+
+        #expect(ScrollReversalPolicy.reversal(for: tinyDelta) == nil)
+    }
+
+    @Test func scrollReversalPolicySkipsFractionalTrackpadDeltas() {
+        let fractional = makeScrollEventDescriptor(vertical: 3.5, horizontal: 2.25)
+
+        #expect(ScrollReversalPolicy.reversal(for: fractional) == nil)
+    }
+
+    @Test func scrollEventDescriptorReadsVerticalDeltaFromAxis1() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
+
+        let descriptor = event.scrollEventDescriptor
+
+        #expect(descriptor.deltas == ScrollWheelDeltas(vertical: 3, horizontal: -2))
+    }
+
+    @Test func reverseScrollIfNeededFlipsWheelEventInPlace() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
+
+        reverseScrollIfNeeded(event)
+
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == -3)
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis2) == 2)
+    }
+
+    @Test func reverseScrollIfNeededSkipsPointDeltasWhenEventCarriesNone() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: 0))
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: 0)
+        #expect(event.scrollEventDescriptor.pointDeltas.isZero)
+
+        reverseScrollIfNeeded(event)
+
+        // CoreGraphics re-derives the point deltas from the line deltas, so only
+        // the line deltas are ours to assert on here.
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == -3)
+    }
+
+    @Test func reverseScrollIfNeededLeavesTrackpadEventUntouched() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: 0))
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 1)
+
+        reverseScrollIfNeeded(event)
+
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == 3)
+    }
+
+    @Test func keyboardManagerSuppressesEveryEventWhileBlocked() throws {
+        let suiteName = "KeyboardManagerBlockedTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+        let event = try #require(makeKeyboardEvent(keyDown: false))
+
+        #expect(manager.shouldSuppressKeyboardEvent(event, type: .keyUp))
+    }
+
+    @Test func keyboardManagerAllowsEventsWhenDebounceDisabled() throws {
+        let suiteName = "KeyboardManagerDebounceOffTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let event = try #require(makeKeyboardEvent(keyDown: true))
+
+        #expect(!manager.shouldSuppressKeyboardEvent(event, type: .keyDown))
+    }
+
+    @Test func keyboardManagerDebouncesRepeatedKeyDownsButIgnoresKeyUps() throws {
+        let suiteName = "KeyboardManagerDebounceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+        manager.keyboardDebounceDelayMilliseconds = 45
+
+        let firstPress = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_000_000_000))
+        #expect(!manager.shouldSuppressKeyboardEvent(firstPress, type: .keyDown))
+
+        // A key up never consults the debounce filter, even inside the window.
+        let release = try #require(makeKeyboardEvent(keyDown: false, timestamp: 1_005_000_000))
+        #expect(!manager.shouldSuppressKeyboardEvent(release, type: .keyUp))
+
+        // A second press 10ms later is chatter and gets suppressed.
+        let bounce = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_010_000_000))
+        #expect(manager.shouldSuppressKeyboardEvent(bounce, type: .keyDown))
     }
 
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
@@ -1037,6 +1191,55 @@ private func makeMouseDevice(
         button4Action: button4Action,
         button5Action: button5Action
     )
+}
+
+private func makeScrollEventDescriptor(
+    vertical: Double,
+    horizontal: Double,
+    pointVertical: Double = 0,
+    pointHorizontal: Double = 0,
+    scrollPhase: Int64 = 0,
+    momentumPhase: Int64 = 0
+) -> ScrollEventDescriptor {
+    ScrollEventDescriptor(
+        deltas: ScrollWheelDeltas(vertical: vertical, horizontal: horizontal),
+        pointDeltas: ScrollWheelDeltas(vertical: pointVertical, horizontal: pointHorizontal),
+        scrollPhase: scrollPhase,
+        momentumPhase: momentumPhase
+    )
+}
+
+private func makeScrollEvent(axis1: Double, axis2: Double) -> CGEvent? {
+    guard let event = CGEvent(
+        scrollWheelEvent2Source: nil,
+        units: .line,
+        wheelCount: 2,
+        wheel1: 0,
+        wheel2: 0,
+        wheel3: 0
+    ) else {
+        return nil
+    }
+
+    event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: axis1)
+    event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: axis2)
+    return event
+}
+
+private func makeKeyboardEvent(
+    keyDown: Bool,
+    keyCode: CGKeyCode = 0,
+    timestamp: CGEventTimestamp? = nil
+) -> CGEvent? {
+    guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: keyDown) else {
+        return nil
+    }
+
+    if let timestamp {
+        event.timestamp = timestamp
+    }
+
+    return event
 }
 
 private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
