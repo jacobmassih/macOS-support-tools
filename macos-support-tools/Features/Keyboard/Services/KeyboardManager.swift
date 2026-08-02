@@ -38,7 +38,6 @@ import Observation
             updateKeyboardEventTap()
         }
     }
-    var tapStatus = "Inactive"
 
     private let userDefaults: UserDefaults
     @ObservationIgnored private var isAccessibilityEnabled = false
@@ -88,21 +87,7 @@ import Observation
         updateKeyboardEventTap()
     }
 
-    internal func updateTapStatus() {
-        if !isAccessibilityEnabled {
-            tapStatus = "Inactive - Accessibility permission required"
-        } else if !keyboardBlocked && !keyboardDebounceEnabled {
-            tapStatus = "Inactive - No keyboard features enabled"
-        } else if keyboardTap.isInstalled {
-            tapStatus = "Active"
-        } else {
-            tapStatus = "Inactive - Event tap unavailable"
-        }
-    }
-
     private func updateKeyboardEventTap() {
-        defer { updateTapStatus() }
-
         guard hasStartedSystemServices else { return }
 
         guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {

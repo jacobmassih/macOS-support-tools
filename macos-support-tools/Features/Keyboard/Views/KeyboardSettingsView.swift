@@ -53,10 +53,6 @@ struct KeyboardSettingsView: View {
                 isGranted: accessibilityManager.isAccessibilityEnabled
             )
 
-            Divider()
-
-            TapStatusRow(tapStatus: keyboardManager.tapStatus)
-
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 

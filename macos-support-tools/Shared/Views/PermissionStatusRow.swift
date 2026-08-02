@@ -7,30 +7,26 @@ struct PermissionStatusRow: View {
     let title: String
     let isGranted: Bool
 
-    var body: some View {
-        StatusIndicatorRow(
-            title: title,
-            systemImage: isGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill",
-            badge: isGranted ? "Active" : "Inactive",
-            isActive: isGranted
-        )
-    }
-}
-
-/// A row that surfaces whether an event tap is running, matching the
-/// permission row so a status card reads as one system.
-struct TapStatusRow: View {
-    let tapStatus: String
+    private var tint: Color { isGranted ? .green : .orange }
 
     var body: some View {
-        let display = TapStatusDisplay(tapStatus)
+        HStack(spacing: 14) {
+            Image(systemName: isGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28)
 
-        StatusIndicatorRow(
-            title: "Tap status",
-            systemImage: "dot.radiowaves.left.and.right",
-            badge: display.badge,
-            detail: display.detail,
-            isActive: display.isActive
-        )
+            Text(title)
+                .font(.headline)
+
+            Spacer(minLength: 16)
+
+            Text(isGranted ? "Active" : "Inactive")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(tint.opacity(0.15)))
+        }
     }
 }

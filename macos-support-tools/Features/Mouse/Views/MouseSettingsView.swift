@@ -38,17 +38,17 @@ struct MouseSettingsView: View {
 
             Divider()
 
-            StatusIndicatorRow(
-                title: "Connected external mouse",
-                systemImage: "computermouse.fill",
-                badge: mouseManager.isAnyExternalMouseConnected ? "Connected" : "Not connected",
-                isActive: mouseManager.isAnyExternalMouseConnected,
-                inactiveTint: .secondary
-            )
+            LabeledContent("Connected external mouse") {
+                Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
+                    .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
+            }
 
             Divider()
 
-            TapStatusRow(tapStatus: mouseManager.tapStatus)
+            LabeledContent("Tap status") {
+                Text(mouseManager.tapStatus)
+                    .foregroundStyle(.secondary)
+            }
 
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
