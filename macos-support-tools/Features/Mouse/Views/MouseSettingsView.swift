@@ -43,13 +43,6 @@ struct MouseSettingsView: View {
                     .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
             }
 
-            Divider()
-
-            LabeledContent("Tap status") {
-                Text(mouseManager.tapStatus)
-                    .foregroundStyle(.secondary)
-            }
-
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 
