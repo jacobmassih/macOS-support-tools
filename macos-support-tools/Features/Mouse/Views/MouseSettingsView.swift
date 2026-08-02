@@ -31,16 +31,16 @@ struct MouseSettingsView: View {
         }
 
         SettingsCard {
-            LabeledContent("Connected external mouse") {
-                Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
-                    .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
-            }
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
 
             Divider()
 
-            LabeledContent("Tap status") {
-                Text(mouseManager.tapStatus)
-                    .foregroundStyle(.secondary)
+            LabeledContent("Connected external mouse") {
+                Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
+                    .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
             }
 
             if !accessibilityManager.isAccessibilityEnabled {
