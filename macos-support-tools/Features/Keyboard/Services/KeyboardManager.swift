@@ -93,7 +93,7 @@ import Observation
             tapStatus = "Inactive - Accessibility permission required"
         } else if !keyboardBlocked && !keyboardDebounceEnabled {
             tapStatus = "Inactive - No keyboard features enabled"
-        } else if keyboardEventTap != nil {
+        } else if keyboardTap.isInstalled {
             tapStatus = "Active"
         } else {
             tapStatus = "Inactive - Event tap unavailable"
