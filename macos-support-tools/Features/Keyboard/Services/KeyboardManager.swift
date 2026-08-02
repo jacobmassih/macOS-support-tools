@@ -12,6 +12,7 @@ import Observation
         static let keyboardDebounceDelayMilliseconds = 45.0
     }
 
+    var tapStatus = KeyboardTapStatus.idle
     var keyboardDebounceEnabled = false {
         didSet {
             userDefaults.set(keyboardDebounceEnabled, forKey: DefaultsKey.keyboardDebounceEnabled)
@@ -55,15 +56,24 @@ import Observation
     ) {
         self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
-        self.eventTapController = KeyboardEventTapController { [weak self] in
-            // Hop to the main thread: the release runs on the tap thread, and
-            // clearing the flag tears that very tap down.
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self?.keyboardBlocked = false
+        self.eventTapController = KeyboardEventTapController(
+            onBlockReleasedByUser: { [weak self] in
+                // Hop to the main thread: the release runs on the tap thread, and
+                // clearing the flag tears that very tap down.
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.keyboardBlocked = false
+                    }
+                }
+            },
+            onStatusChanged: { [weak self] in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.updateTapStatus()
+                    }
                 }
             }
-        }
+        )
         accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
             self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
@@ -77,6 +87,7 @@ import Observation
         keyboardDebounceDelayMilliseconds = userDefaults.double(
             forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
         )
+        updateTapStatus()
     }
 
     deinit {
@@ -101,6 +112,7 @@ import Observation
     private func updateKeyboardEventTap() {
         let settings = keyboardTapSettings()
         eventTapController.updateSettings(settings)
+        defer { updateTapStatus(settings: settings) }
 
         guard hasStartedSystemServices else { return }
 
@@ -110,6 +122,22 @@ import Observation
         }
 
         eventTapController.install(eventMask: keyboardEventMaskForCurrentFeatures())
+    }
+
+    private func updateTapStatus(settings: KeyboardTapSettings? = nil) {
+        let settings = settings ?? keyboardTapSettings()
+
+        if !settings.needsEventTap {
+            tapStatus = .idle
+        } else if !isAccessibilityEnabled {
+            tapStatus = .accessibilityRequired
+        } else if eventTapController.isDisabledByRepeatedTimeouts {
+            tapStatus = .disabledAfterRepeatedTimeouts
+        } else if eventTapController.isInstalled {
+            tapStatus = .active
+        } else {
+            tapStatus = .unavailable
+        }
     }
 
     private func keyboardTapSettings() -> KeyboardTapSettings {

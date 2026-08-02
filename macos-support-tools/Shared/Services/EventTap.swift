@@ -169,9 +169,10 @@ nonisolated final class EventTap: @unchecked Sendable {
                 Self.logger.error(
                     """
                     Leaving \(self.label, privacy: .public) event tap disabled after \
-                    \(EventTapTimeoutBreaker.budget, privacy: .public) timeouts within \
-                    \(EventTapTimeoutBreaker.windowSeconds, privacy: .public)s. Its callback \
-                    is not keeping up, and re-arming it would keep stalling input.
+                    \(self.timeoutBreaker.timeoutsInWindow, privacy: .public) timeouts within \
+                    \(EventTapTimeoutBreaker.windowSeconds, privacy: .public)s (retry budget: \
+                    \(EventTapTimeoutBreaker.budget, privacy: .public)). Its callback is not \
+                    keeping up, and re-arming it would keep stalling input.
                     """
                 )
                 publishStatus()

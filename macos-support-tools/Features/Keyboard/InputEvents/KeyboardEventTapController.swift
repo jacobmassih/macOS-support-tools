@@ -30,9 +30,11 @@ nonisolated final class KeyboardEventTapController: @unchecked Sendable {
         category: "KeyboardEventTapController"
     )
 
-    private let tap = EventTap(label: "keyboard")
+    private let tap: EventTap
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let notifyBlockReleasedByUser: @Sendable () -> Void
+    private let notifyStatusChanged: @Sendable () -> Void
+    private let reenableAfterTimeout: @Sendable () -> Bool
 
     var isInstalled: Bool {
         tap.status.isInstalled
@@ -42,12 +44,23 @@ nonisolated final class KeyboardEventTapController: @unchecked Sendable {
         tap.status.isDisabledByRepeatedTimeouts
     }
 
-    /// - Parameter onBlockReleasedByUser: Invoked when the system disables the tap
-    ///   at the user's request while the keyboard is blocked. That is the one way
-    ///   out of a full block that does not depend on the mouse, so the owner has
-    ///   to clear the flag rather than the tap silently re-arming.
-    init(onBlockReleasedByUser: @escaping @Sendable () -> Void) {
+    /// - Parameters:
+    ///   - onBlockReleasedByUser: Invoked when the system disables the tap at the
+    ///     user's request while the keyboard is blocked. That is the one way out
+    ///     of a full block that does not depend on the mouse, so the owner has to
+    ///     clear the flag rather than the tap silently re-arming.
+    ///   - onStatusChanged: Invoked when the timeout breaker leaves the tap down.
+    ///     The owner uses it to publish the failure to observable UI state.
+    init(
+        onBlockReleasedByUser: @escaping @Sendable () -> Void,
+        onStatusChanged: @escaping @Sendable () -> Void,
+        reenableAfterTimeout: (@Sendable () -> Bool)? = nil
+    ) {
+        let tap = EventTap(label: "keyboard")
+        self.tap = tap
         self.notifyBlockReleasedByUser = onBlockReleasedByUser
+        self.notifyStatusChanged = onStatusChanged
+        self.reenableAfterTimeout = reenableAfterTimeout ?? { tap.reenableAfterTimeout() }
     }
 
     func updateSettings(_ settings: KeyboardTapSettings) {
@@ -93,7 +106,9 @@ nonisolated final class KeyboardEventTapController: @unchecked Sendable {
 
     func handleTapDisabled(_ type: CGEventType) {
         guard type == .tapDisabledByUserInput else {
-            tap.reenableAfterTimeout()
+            guard !reenableAfterTimeout() else { return }
+
+            notifyStatusChanged()
             return
         }
 

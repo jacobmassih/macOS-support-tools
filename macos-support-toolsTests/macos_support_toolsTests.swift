@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import IOKit.hid
+import os
 import Testing
 @testable import macos_support_tools
 
@@ -1180,6 +1181,34 @@ struct macos_support_toolsTests {
         #expect(manager.keyboardDebounceEnabled)
     }
 
+    @Test func keyboardTapControllerReportsOnlyTheTimeoutThatTripsTheBreaker() {
+        let reenableResults = OSAllocatedUnfairLock(initialState: [true, false])
+        let statusChangeCount = OSAllocatedUnfairLock(initialState: 0)
+        let controller = KeyboardEventTapController(
+            onBlockReleasedByUser: {},
+            onStatusChanged: {
+                statusChangeCount.withLock { $0 += 1 }
+            },
+            reenableAfterTimeout: {
+                reenableResults.withLock { $0.removeFirst() }
+            }
+        )
+
+        controller.handleTapDisabled(.tapDisabledByTimeout)
+        #expect(statusChangeCount.withLock { $0 } == 0)
+
+        controller.handleTapDisabled(.tapDisabledByTimeout)
+        #expect(statusChangeCount.withLock { $0 } == 1)
+    }
+
+    @Test func keyboardTapStatusDescribesRepeatedTimeoutFailure() {
+        #expect(KeyboardTapStatus.idle.displayName == "Idle - No keyboard features enabled")
+        #expect(
+            KeyboardTapStatus.disabledAfterRepeatedTimeouts.displayName
+                == "Disabled - Event tap kept timing out"
+        )
+    }
+
     @Test func timeoutBreakerReenablesUpToItsBudgetThenTrips() {
         var breaker = EventTapTimeoutBreaker()
 
@@ -1197,6 +1226,7 @@ struct macos_support_toolsTests {
         )
         #expect(!didReenablePastBudget)
         #expect(breaker.isTripped)
+        #expect(breaker.timeoutsInWindow == EventTapTimeoutBreaker.budget + 1)
 
         // A tripped breaker stays tripped, however long the caller keeps trying.
         let didReenableMuchLater = breaker.shouldReenable(at: 10_000)

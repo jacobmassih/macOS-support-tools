@@ -5,8 +5,9 @@ import Foundation
 /// The system disables a tap that times out, meaning its callback did not return
 /// before the watchdog deadline. Re-arming unconditionally turns that into a
 /// livelock: the re-armed tap stalls the next event, times out again, and input
-/// keeps freezing while the log fills with retries. Once `budget` timeouts land
-/// inside `windowSeconds`, the breaker trips and the tap stays down until reset.
+/// keeps freezing while the log fills with retries. `budget` is the number of
+/// timeouts that may be re-armed inside `windowSeconds`; the next timeout trips
+/// the breaker and leaves the tap down until reset.
 nonisolated struct EventTapTimeoutBreaker: Sendable {
     static let budget = 5
     static let windowSeconds: TimeInterval = 60
