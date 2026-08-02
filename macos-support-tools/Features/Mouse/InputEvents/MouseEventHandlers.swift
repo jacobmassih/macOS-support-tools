@@ -22,33 +22,37 @@ func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, 
 
 // MARK: - Event Tap Callbacks
 
-func scrollEventCallback(
+// These run on `EventTapThread`, never the main thread, so they must not touch
+// the observable managers; everything they need comes from the controller's
+// lock-protected `settings` snapshot.
+
+nonisolated func scrollEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
-    
-    let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    let controller = Unmanaged<MouseEventTapController>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
-        print("[MouseManager] Scroll tap disabled by the system; re-enabling.")
-        manager.reenableScrollEventTap()
-        return Unmanaged.passRetained(event)
+        controller.handleScrollTapDisabled(type)
+        return Unmanaged.passUnretained(event)
     }
 
-    // Only apply scroll reversal if we have external mouse connected and conditions are met
-    if manager.shouldReverseScroll() {
+    // Only apply scroll reversal if we have an external mouse connected and
+    // natural scrolling is disabled in the published settings snapshot.
+    if controller.settings.shouldReverseScroll {
         reverseScrollIfNeeded(event)
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
-func reverseScrollIfNeeded(_ event: CGEvent) {
+nonisolated func reverseScrollIfNeeded(_ event: CGEvent) {
     guard let reversal = ScrollReversalPolicy.reversal(for: event.scrollEventDescriptor) else {
         return
     }
@@ -57,7 +61,7 @@ func reverseScrollIfNeeded(_ event: CGEvent) {
 }
 
 extension CGEvent {
-    var scrollEventDescriptor: ScrollEventDescriptor {
+    nonisolated var scrollEventDescriptor: ScrollEventDescriptor {
         ScrollEventDescriptor(
             deltas: ScrollWheelDeltas(
                 vertical: getDoubleValueField(.scrollWheelEventDeltaAxis1),
@@ -72,7 +76,7 @@ extension CGEvent {
         )
     }
 
-    func applyScrollReversal(_ reversal: ScrollReversal) {
+    nonisolated func applyScrollReversal(_ reversal: ScrollReversal) {
         setDoubleValueField(.scrollWheelEventDeltaAxis1, value: reversal.deltas.vertical)
         setDoubleValueField(.scrollWheelEventDeltaAxis2, value: reversal.deltas.horizontal)
 
@@ -85,63 +89,55 @@ extension CGEvent {
     }
 }
 
-func buttonEventCallback(
+nonisolated func buttonEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-        guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+    guard let refcon = refcon else {
+        return Unmanaged.passUnretained(event)
     }
-    
-    let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    let controller = Unmanaged<MouseEventTapController>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
-        print("[MouseManager] Button tap disabled by the system; re-enabling.")
-        manager.reenableButtonEventTap()
-        return Unmanaged.passRetained(event)
+        controller.handleButtonTapDisabled(type)
+        return Unmanaged.passUnretained(event)
     }
 
-    if manager.mouseButtonsEnabled == false {
-        return Unmanaged.passRetained(event)
-    }
-    
-    if manager.citrixPassthroughEnabled && manager.citrixMonitor.isCitrixActive {
-        return Unmanaged.passRetained(event)
-    }
-    
-    
+    // Buttons the user has not claimed, and every button while Citrix passthrough
+    // applies, arrive here with no action to run.
+    let settings = controller.settings
+
     // Check if the event is from a side button (Button 4 or Button 5)
     let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
-    
+
     switch buttonNumber {
     case 4:
         // Button 4 (Forward) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button4Enabled {
-            let action = device.button4Action
+        if let action = settings.button4Action {
             return handleButtonAction(event: event, action: action)
         }
     case 3:
         // Button 5 (Back) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button5Enabled {
-            let action = device.button5Action
+        if let action = settings.button5Action {
             return handleButtonAction(event: event, action: action)
         }
     default:
         break
     }
-    
-    return Unmanaged.passRetained(event)
+
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Button Action Handler
 
-private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Unmanaged<CGEvent>? {
+nonisolated private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Unmanaged<CGEvent>? {
     // Only handle button down events to avoid duplicate actions
     let eventType = event.type
     if eventType != .otherMouseDown {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     switch action {
@@ -168,13 +164,13 @@ private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Un
         break
     }
     
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Utility Functions
 
 // Simple and reliable keyboard shortcut simulation
-private func simulateKeyboardShortcut(keyCode: CGKeyCode, modifiers: CGEventFlags) {
+nonisolated private func simulateKeyboardShortcut(keyCode: CGKeyCode, modifiers: CGEventFlags) {
     guard let source = CGEventSource(stateID: .hidSystemState) else { return }
     
     // Create key down event

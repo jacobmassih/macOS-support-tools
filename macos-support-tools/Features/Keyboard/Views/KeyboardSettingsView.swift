@@ -53,6 +53,13 @@ struct KeyboardSettingsView: View {
                 isGranted: accessibilityManager.isAccessibilityEnabled
             )
 
+            Divider()
+
+            LabeledContent("Tap status") {
+                Text(keyboardManager.tapStatus.displayName)
+                    .foregroundStyle(.secondary)
+            }
+
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 

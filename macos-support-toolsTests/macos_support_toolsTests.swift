@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import IOKit.hid
+import os
 import Testing
 @testable import macos_support_tools
 
@@ -924,9 +925,10 @@ struct macos_support_toolsTests {
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
         manager.keyboardBlocked = true
+        let controller = try #require(manager.eventTapController)
         let event = try #require(makeKeyboardEvent(keyDown: false))
 
-        #expect(manager.shouldSuppressKeyboardEvent(event, type: .keyUp))
+        #expect(controller.shouldSuppressEvent(event, type: .keyUp))
     }
 
     @Test func keyboardManagerAllowsEventsWhenDebounceDisabled() throws {
@@ -937,9 +939,10 @@ struct macos_support_toolsTests {
         }
 
         let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let controller = try #require(manager.eventTapController)
         let event = try #require(makeKeyboardEvent(keyDown: true))
 
-        #expect(!manager.shouldSuppressKeyboardEvent(event, type: .keyDown))
+        #expect(!controller.shouldSuppressEvent(event, type: .keyDown))
     }
 
     @Test func keyboardManagerDebouncesRepeatedKeyDownsButIgnoresKeyUps() throws {
@@ -952,17 +955,18 @@ struct macos_support_toolsTests {
         let manager = makeKeyboardManager(userDefaults: userDefaults)
         manager.keyboardDebounceEnabled = true
         manager.keyboardDebounceDelayMilliseconds = 45
+        let controller = try #require(manager.eventTapController)
 
         let firstPress = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_000_000_000))
-        #expect(!manager.shouldSuppressKeyboardEvent(firstPress, type: .keyDown))
+        #expect(!controller.shouldSuppressEvent(firstPress, type: .keyDown))
 
         // A key up never consults the debounce filter, even inside the window.
         let release = try #require(makeKeyboardEvent(keyDown: false, timestamp: 1_005_000_000))
-        #expect(!manager.shouldSuppressKeyboardEvent(release, type: .keyUp))
+        #expect(!controller.shouldSuppressEvent(release, type: .keyUp))
 
         // A second press 10ms later is chatter and gets suppressed.
         let bounce = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_010_000_000))
-        #expect(manager.shouldSuppressKeyboardEvent(bounce, type: .keyDown))
+        #expect(controller.shouldSuppressEvent(bounce, type: .keyDown))
     }
 
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
@@ -1040,6 +1044,23 @@ struct macos_support_toolsTests {
         #expect(!CGEventType.keyDown.isTapDisabledEvent)
     }
 
+    @Test func eventTapCallbacksDoNotRetainPassThroughEvents() throws {
+        let callbacks: [(CGEventTapCallBack, CGEventType)] = [
+            (scrollEventCallback, .scrollWheel),
+            (buttonEventCallback, .otherMouseDown),
+            (keyboardEventCallback, .keyDown)
+        ]
+
+        for (callback, type) in callbacks {
+            let event = try #require(CGEvent(source: nil))
+            let retainCountBeforeCallback = CFGetRetainCount(event)
+            let result = try invokeRawTapCallback(callback, type: type, event: event)
+
+            #expect(result?.toOpaque() == Unmanaged.passUnretained(event).toOpaque())
+            #expect(CFGetRetainCount(event) == retainCountBeforeCallback)
+        }
+    }
+
     @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
         let suiteName = "MouseTapDisabledTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -1053,13 +1074,13 @@ struct macos_support_toolsTests {
 
         let scrollResult = try invokeTapCallback(
             scrollEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .tapDisabledByTimeout,
             event: scrollEvent
         )
         let buttonResult = try invokeTapCallback(
             buttonEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .tapDisabledByUserInput,
             event: buttonEvent
         )
@@ -1081,7 +1102,7 @@ struct macos_support_toolsTests {
         let disabledNotification = try #require(CGEvent(source: nil))
         let notificationResult = try invokeTapCallback(
             keyboardEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .tapDisabledByTimeout,
             event: disabledNotification
         )
@@ -1093,7 +1114,7 @@ struct macos_support_toolsTests {
         let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
         let keyDownResult = try invokeTapCallback(
             keyboardEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .keyDown,
             event: keyDownEvent
         )
@@ -1113,7 +1134,7 @@ struct macos_support_toolsTests {
         let notification = try #require(CGEvent(source: nil))
         let result = try invokeTapCallback(
             keyboardEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .tapDisabledByUserInput,
             event: notification
         )
@@ -1129,7 +1150,7 @@ struct macos_support_toolsTests {
         let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
         let keyDownResult = try invokeTapCallback(
             keyboardEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .keyDown,
             event: keyDownEvent
         )
@@ -1149,7 +1170,7 @@ struct macos_support_toolsTests {
         let notification = try #require(CGEvent(source: nil))
         let result = try invokeTapCallback(
             keyboardEventCallback,
-            refconObject: manager,
+            refconObject: manager.eventTapController,
             type: .tapDisabledByUserInput,
             event: notification
         )
@@ -1158,6 +1179,301 @@ struct macos_support_toolsTests {
         #expect(result === notification)
         #expect(!manager.keyboardBlocked)
         #expect(manager.keyboardDebounceEnabled)
+    }
+
+    @Test func keyboardTapControllerReportsOnlyTheTimeoutThatTripsTheBreaker() {
+        let reenableResults = OSAllocatedUnfairLock(initialState: [true, false])
+        let statusChangeCount = OSAllocatedUnfairLock(initialState: 0)
+        let controller = KeyboardEventTapController(
+            onBlockReleasedByUser: {},
+            onStatusChanged: {
+                statusChangeCount.withLock { $0 += 1 }
+            },
+            reenableAfterTimeout: {
+                reenableResults.withLock { $0.removeFirst() }
+            }
+        )
+
+        controller.handleTapDisabled(.tapDisabledByTimeout)
+        #expect(statusChangeCount.withLock { $0 } == 0)
+
+        controller.handleTapDisabled(.tapDisabledByTimeout)
+        #expect(statusChangeCount.withLock { $0 } == 1)
+    }
+
+    @Test func keyboardTapStatusDescribesRepeatedTimeoutFailure() {
+        #expect(KeyboardTapStatus.idle.displayName == "Idle - No keyboard features enabled")
+        #expect(
+            KeyboardTapStatus.disabledAfterRepeatedTimeouts.displayName
+                == "Disabled - Event tap kept timing out"
+        )
+    }
+
+    @Test func timeoutBreakerReenablesUpToItsBudgetThenTrips() {
+        var breaker = EventTapTimeoutBreaker()
+
+        for attempt in 1...EventTapTimeoutBreaker.budget {
+            let didReenable = breaker.shouldReenable(at: Double(attempt))
+
+            #expect(didReenable)
+            #expect(!breaker.isTripped)
+        }
+
+        // Re-arming past the budget is the livelock: each retry stalls the next
+        // event, so the tap has to be left down instead.
+        let didReenablePastBudget = breaker.shouldReenable(
+            at: Double(EventTapTimeoutBreaker.budget + 1)
+        )
+        #expect(!didReenablePastBudget)
+        #expect(breaker.isTripped)
+        #expect(breaker.timeoutsInWindow == EventTapTimeoutBreaker.budget + 1)
+
+        // A tripped breaker stays tripped, however long the caller keeps trying.
+        let didReenableMuchLater = breaker.shouldReenable(at: 10_000)
+        #expect(!didReenableMuchLater)
+        #expect(breaker.isTripped)
+    }
+
+    @Test func timeoutBreakerForgivesTimeoutsSpacedBeyondItsWindow() {
+        var breaker = EventTapTimeoutBreaker()
+        let spacing = EventTapTimeoutBreaker.windowSeconds + 1
+
+        // An occasional stall is normal; only a burst means the callback cannot
+        // keep up, so widely spaced timeouts must never exhaust the budget.
+        for attempt in 0...(EventTapTimeoutBreaker.budget * 3) {
+            let didReenable = breaker.shouldReenable(at: Double(attempt) * spacing)
+
+            #expect(didReenable)
+        }
+
+        #expect(!breaker.isTripped)
+        #expect(breaker.timeoutsInWindow == 1)
+    }
+
+    @Test func timeoutBreakerCountsTimeoutsOnTheWindowBoundaryAsOneBurst() {
+        var breaker = EventTapTimeoutBreaker()
+
+        let didReenableFirst = breaker.shouldReenable(at: 0)
+        let didReenableOnBoundary = breaker.shouldReenable(
+            at: EventTapTimeoutBreaker.windowSeconds
+        )
+
+        #expect(didReenableFirst)
+        #expect(didReenableOnBoundary)
+        #expect(breaker.timeoutsInWindow == 2)
+    }
+
+    @Test func resetRestoresATrippedTimeoutBreaker() {
+        var breaker = EventTapTimeoutBreaker()
+
+        for attempt in 0...EventTapTimeoutBreaker.budget {
+            _ = breaker.shouldReenable(at: Double(attempt))
+        }
+        #expect(breaker.isTripped)
+
+        // Reinstalling a tap is a fresh start: the reason it stalled may be gone.
+        breaker.reset()
+        let didReenableAfterReset = breaker.shouldReenable(at: 1)
+
+        #expect(!breaker.isTripped)
+        #expect(didReenableAfterReset)
+    }
+
+    @Test func mouseTapStatusSeparatesIdleFromFaults() {
+        // Idle means no feature asked for a tap, which must not read as a failure.
+        #expect(!MouseTapStatus.idle.isFault)
+        #expect(!MouseTapStatus.active.isFault)
+        #expect(MouseTapStatus.accessibilityRequired.isFault)
+        #expect(MouseTapStatus.unavailable.isFault)
+        #expect(MouseTapStatus.disabledAfterRepeatedTimeouts.isFault)
+    }
+
+    @Test func mouseTapsStayIdleUntilAFeatureNeedsThem() throws {
+        let suiteName = "MouseTapGatingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.naturalScrollEnabled = true
+        manager.mouseButtonsEnabled = false
+        manager.startSystemServices()
+
+        // With scroll reversal off, buttons off, and nothing connected, an
+        // installed tap would sit in the delivery path of every scroll for nothing.
+        #expect(manager.tapStatus == .idle)
+
+        manager.setDetectedDevices([makeMouseDevice()])
+        #expect(manager.tapStatus == .idle)
+    }
+
+    @Test func mouseTapsAreRequiredOnceScrollReversalHasSomethingToReverse() throws {
+        let suiteName = "MouseTapScrollGatingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.mouseButtonsEnabled = false
+        manager.naturalScrollEnabled = false
+        manager.startSystemServices()
+        // Starting the monitor detects whatever is really plugged into this Mac,
+        // so clear it to keep the gating assertions independent of the hardware.
+        manager.setDetectedDevices([])
+
+        // Reversal alone is not enough: with no external mouse there is nothing
+        // to reverse, so the tap stays out of the scroll path.
+        #expect(manager.tapStatus == .idle)
+
+        manager.setDetectedDevices([makeMouseDevice()])
+
+        #expect(manager.shouldReverseScroll())
+        // The tap is genuinely needed now, so a missing permission is a fault
+        // worth reporting rather than the idle state.
+        #expect(manager.tapStatus == .accessibilityRequired)
+    }
+
+    @Test func mouseTapsAreRequiredOnceAConnectedDeviceOverridesAButton() throws {
+        let suiteName = "MouseTapButtonGatingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.naturalScrollEnabled = true
+        manager.mouseButtonsEnabled = true
+        manager.startSystemServices()
+        manager.setDetectedDevices([
+            makeMouseDevice(button4Enabled: false, button5Enabled: false)
+        ])
+
+        // Every side button is passed through, so the tap would only add latency.
+        #expect(manager.tapStatus == .idle)
+
+        manager.updateButtonSettings(
+            for: makeMouseDevice().id,
+            buttonType: .button4,
+            enabled: true
+        )
+
+        #expect(manager.tapStatus == .accessibilityRequired)
+    }
+
+    @Test func mouseTapSettingsCarryTheActiveDeviceButtonActions() throws {
+        let suiteName = "MouseTapSettingsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.mouseButtonsEnabled = true
+        manager.naturalScrollEnabled = false
+        manager.setDetectedDevices([
+            makeMouseDevice(button4Action: .middleClick, button5Action: .back)
+        ])
+
+        // The callbacks run off the main thread and cannot read the manager, so
+        // the published snapshot is the only thing that decides what they do.
+        #expect(manager.eventTapController.settings == MouseTapSettings(
+            shouldReverseScroll: true,
+            button4Action: .middleClick,
+            button5Action: .back
+        ))
+    }
+
+    @Test func mouseTapSettingsDropActionsForButtonsTheUserDisabled() throws {
+        let suiteName = "MouseTapSettingsDisabledButtonTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.mouseButtonsEnabled = true
+        manager.setDetectedDevices([makeMouseDevice(button4Enabled: false)])
+
+        // A nil action is how the snapshot says "pass this button through".
+        #expect(manager.eventTapController.settings.button4Action == nil)
+        #expect(manager.eventTapController.settings.button5Action == .back)
+
+        manager.mouseButtonsEnabled = false
+
+        #expect(manager.eventTapController.settings.button5Action == nil)
+    }
+
+    @Test func mouseTapSettingsFollowScrollReversalAndConnectedDevices() throws {
+        let suiteName = "MouseTapSettingsScrollTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        manager.naturalScrollEnabled = false
+        manager.setDetectedDevices([])
+
+        #expect(!manager.eventTapController.settings.shouldReverseScroll)
+
+        manager.setDetectedDevices([makeMouseDevice()])
+        #expect(manager.eventTapController.settings.shouldReverseScroll)
+
+        manager.naturalScrollEnabled = true
+        #expect(!manager.eventTapController.settings.shouldReverseScroll)
+    }
+
+    @Test func keyboardTapControllerSuppressesEveryKeyWhileBlocked() throws {
+        let suiteName = "KeyboardTapControllerBlockTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let controller = try #require(manager.eventTapController)
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+
+        #expect(!controller.shouldSuppressEvent(event, type: .keyDown))
+
+        manager.keyboardBlocked = true
+
+        #expect(controller.shouldSuppressEvent(event, type: .keyDown))
+        #expect(controller.shouldSuppressEvent(event, type: .flagsChanged))
+    }
+
+    @Test func keyboardTapSettingsRepublishAChangedDebounceDelay() throws {
+        let suiteName = "KeyboardTapDelayPublishTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+        manager.keyboardDebounceDelayMilliseconds = 50
+
+        let controller = try #require(manager.eventTapController)
+
+        let firstPress = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        firstPress.timestamp = 1_000_000_000
+        #expect(!controller.shouldSuppressEvent(firstPress, type: .keyDown))
+
+        let bounce = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        bounce.timestamp = 1_010_000_000
+        #expect(controller.shouldSuppressEvent(bounce, type: .keyDown))
+
+        // The callback reads a snapshot, so a narrowed window only takes effect
+        // if changing the delay republishes it.
+        manager.keyboardDebounceDelayMilliseconds = 5
+
+        let afterNarrowedWindow = try #require(
+            CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)
+        )
+        afterNarrowedWindow.timestamp = 1_020_000_000
+        #expect(!controller.shouldSuppressEvent(afterNarrowedWindow, type: .keyDown))
     }
 
     @Test func mouseButtonActionRoundTripsRemainingCases() throws {
@@ -1405,7 +1721,16 @@ private func invokeTapCallback(
     let proxy = try #require(OpaquePointer(bitPattern: 1))
 
     let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
-    return callback(proxy, type, event, refcon)?.takeRetainedValue()
+    return callback(proxy, type, event, refcon)?.takeUnretainedValue()
+}
+
+private func invokeRawTapCallback(
+    _ callback: CGEventTapCallBack,
+    type: CGEventType,
+    event: CGEvent
+) throws -> Unmanaged<CGEvent>? {
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
+    return callback(proxy, type, event, nil)
 }
 
 private final class TrashRecorder: @unchecked Sendable {

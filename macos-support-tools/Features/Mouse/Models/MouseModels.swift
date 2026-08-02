@@ -55,9 +55,49 @@ enum HIDDeviceClassifier {
     }
 }
 
+/// Health of the mouse event taps. A tap is only installed while some enabled
+/// feature needs it, so "not installed" is a normal idle state rather than a
+/// fault; `isFault` is what the UI should colour on.
+enum MouseTapStatus: Equatable {
+    case active
+    case idle
+    case accessibilityRequired
+    case unavailable
+    case disabledAfterRepeatedTimeouts
+
+    var displayName: String {
+        switch self {
+        case .active: return "Active"
+        case .idle: return "Idle - No mouse features enabled"
+        case .accessibilityRequired: return "Inactive - Accessibility permission required"
+        case .unavailable: return "Inactive - Event tap unavailable"
+        case .disabledAfterRepeatedTimeouts: return "Disabled - Event tap kept timing out"
+        }
+    }
+
+    var isFault: Bool {
+        switch self {
+        case .active, .idle: return false
+        case .accessibilityRequired, .unavailable, .disabledAfterRepeatedTimeouts: return true
+        }
+    }
+}
+
+/// Everything the mouse tap callbacks need, flattened to plain values.
+///
+/// The callbacks run on `EventTapThread`, so they cannot read `MouseManager`:
+/// SwiftUI mutates that observable state on the main thread. `MouseManager`
+/// publishes a fresh snapshot whenever an input to it changes. A `nil` action
+/// means the button is passed through untouched.
+nonisolated struct MouseTapSettings: Equatable, Sendable {
+    var shouldReverseScroll = false
+    var button4Action: MouseButtonAction?
+    var button5Action: MouseButtonAction?
+}
+
 // Scroll wheel deltas, named after the axis they represent rather than the
 // CGEvent field: axis 1 is vertical, axis 2 is horizontal.
-struct ScrollWheelDeltas: Equatable {
+nonisolated struct ScrollWheelDeltas: Equatable, Sendable {
     let vertical: Double
     let horizontal: Double
 
@@ -70,7 +110,7 @@ struct ScrollWheelDeltas: Equatable {
     }
 }
 
-struct ScrollEventDescriptor: Equatable {
+nonisolated struct ScrollEventDescriptor: Equatable, Sendable {
     let deltas: ScrollWheelDeltas
     let pointDeltas: ScrollWheelDeltas
     let scrollPhase: Int64
@@ -79,12 +119,12 @@ struct ScrollEventDescriptor: Equatable {
 
 // The deltas to write back to an event, or nil for `pointDeltas` when the
 // event carries none and they should be left alone.
-struct ScrollReversal: Equatable {
+nonisolated struct ScrollReversal: Equatable, Sendable {
     let deltas: ScrollWheelDeltas
     let pointDeltas: ScrollWheelDeltas?
 }
 
-enum ScrollReversalPolicy {
+nonisolated enum ScrollReversalPolicy {
     // Mouse wheels report whole-number deltas; anything smaller is a trackpad
     // gesture that macOS already handles via natural scrolling.
     private static let discreteTolerance = 0.01
@@ -120,7 +160,7 @@ enum ScrollReversalPolicy {
 }
 
 // Mouse button actions for side buttons
-enum MouseButtonAction: CaseIterable, Codable, Hashable {
+nonisolated enum MouseButtonAction: CaseIterable, Codable, Hashable, Sendable {
     case none
     case back
     case forward
