@@ -1169,6 +1169,99 @@ struct macos_support_toolsTests {
             #expect(decoded == action)
         }
     }
+
+    @Test func cleanupScanCountsHiddenFilesTowardDirectoryTotals() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let cacheDirectoryURL = rootURL.appending(path: "HiddenFixture", directoryHint: .isDirectory)
+        let hiddenDirectoryURL = cacheDirectoryURL.appending(path: ".hidden-subdir", directoryHint: .isDirectory)
+        let hiddenFileURL = cacheDirectoryURL.appending(path: ".hidden-cache.bin")
+        let hiddenNestedFileURL = hiddenDirectoryURL.appending(path: "nested.bin")
+        let hiddenPayload = Data(repeating: 0xCD, count: 64 * 1024)
+        let nestedPayload = Data(repeating: 0xCE, count: 32 * 1024)
+
+        try fileManager.createDirectory(at: hiddenDirectoryURL, withIntermediateDirectories: true)
+        try hiddenPayload.write(to: hiddenFileURL)
+        try nestedPayload.write(to: hiddenNestedFileURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .userCaches,
+            title: "Test Caches",
+            subtitle: "Fixture category",
+            systemImage: "internaldrive",
+            paths: [rootURL],
+            riskLevel: .safe
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.url.resolvingSymlinksInPath() == cacheDirectoryURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.isDirectory == true)
+        #expect(result.items.first?.modifiedDate != nil)
+        // Hidden entries are the directory's only content, so the total is proof
+        // both the dotfile and the dot-directory's contents were walked.
+        #expect(result.totalBytes >= Int64(hiddenPayload.count + nestedPayload.count))
+    }
+
+    @Test @MainActor func cleanupManagerConcurrentScanKeepsDeclaredCategoryOrder() async throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        // Deliberately not `CleanupCategoryID.allCases` order, so the assertion
+        // below can only pass if results follow the declared category order.
+        let orderedIDs: [CleanupCategoryID] = [.xcodeDerivedData, .trash, .logs, .userCaches, .temporaryFiles]
+        var categories: [CleanupCategory] = []
+
+        for (offset, id) in orderedIDs.enumerated() {
+            let categoryRootURL = rootURL.appending(path: id.rawValue, directoryHint: .isDirectory)
+            let candidateURL = categoryRootURL.appending(path: "candidate", directoryHint: .isDirectory)
+            // The first category gets a far deeper tree, so under concurrent
+            // scanning it is very unlikely to be the first one to finish.
+            let nestedCount = offset == 0 ? 120 : 1
+
+            for index in 0..<nestedCount {
+                let nestedURL = candidateURL.appending(path: "nested-\(index)", directoryHint: .isDirectory)
+                try fileManager.createDirectory(at: nestedURL, withIntermediateDirectories: true)
+                try Data(repeating: 0xEF, count: 4 * 1024)
+                    .write(to: nestedURL.appending(path: "payload-\(index).bin"))
+            }
+
+            categories.append(
+                CleanupCategory(
+                    id: id,
+                    title: id.rawValue,
+                    subtitle: "Fixture category",
+                    systemImage: "trash",
+                    paths: [categoryRootURL],
+                    riskLevel: .safe
+                )
+            )
+        }
+
+        let manager = CleanupManager(categories: categories)
+
+        await manager.scan()
+
+        #expect(manager.lastError == nil)
+        #expect(!manager.isScanning)
+        #expect(manager.lastScanDate != nil)
+        #expect(manager.scanResults.map(\.category.id) == orderedIDs)
+        #expect(manager.scanResults.allSatisfy { $0.itemCount == 1 })
+        #expect(manager.totalReclaimableBytes > 0)
+
+        let deepestTotalBytes = try #require(manager.scanResults.first?.totalBytes)
+        let shallowTotalBytes = try #require(manager.scanResults.last?.totalBytes)
+        #expect(deepestTotalBytes > shallowTotalBytes)
+    }
 }
 
 private func makeMouseDevice(
