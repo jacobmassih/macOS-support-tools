@@ -172,27 +172,27 @@ func keyboardEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
 
     if type == .tapDisabledByUserInput {
         keyboardManager.handleUserInitiatedTapDisable()
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if type == .tapDisabledByTimeout {
         print("[KeyboardManager] Keyboard tap disabled by timeout; re-enabling.")
         keyboardManager.reenableKeyboardEventTap()
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 extension Comparable {
