@@ -47,8 +47,15 @@ struct KeyboardSettingsView: View {
             .disabled(!accessibilityManager.isAccessibilityEnabled || !keyboardManager.keyboardDebounceEnabled)
         }
 
-        if !accessibilityManager.isAccessibilityEnabled {
-            SettingsCard {
+        SettingsCard {
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
+
+            if !accessibilityManager.isAccessibilityEnabled {
+                Divider()
+
                 AccessibilityAccessButton()
             }
         }

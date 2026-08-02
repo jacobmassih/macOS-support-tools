@@ -49,11 +49,25 @@ final class CleanupManager {
         let categoriesToScan = categories
 
         do {
-            let results = try await Task.detached(priority: .userInitiated) {
-                try categoriesToScan.map { category in
-                    try Self.scan(category: category)
+            // Categories walk unrelated trees, so they scan concurrently. Results are
+            // reassembled by index because completion order is not category order.
+            let results = try await withThrowingTaskGroup(
+                of: (offset: Int, result: CleanupScanResult).self
+            ) { group in
+                for (offset, category) in categoriesToScan.enumerated() {
+                    group.addTask(priority: .userInitiated) {
+                        (offset, try Self.scan(category: category))
+                    }
                 }
-            }.value
+
+                var orderedResults = [CleanupScanResult?](repeating: nil, count: categoriesToScan.count)
+
+                for try await (offset, result) in group {
+                    orderedResults[offset] = result
+                }
+
+                return orderedResults.compactMap { $0 }
+            }
 
             scanResults = results
             lastScanDate = Date()
@@ -185,17 +199,35 @@ final class CleanupManager {
         case permissionDenied
     }
 
+    /// Everything a `CleanupItem` needs, prefetched by the directory read so the
+    /// per-item `resourceValues` lookup is served from the cached values.
+    nonisolated private static let itemResourceKeys: Set<URLResourceKey> = [
+        .contentModificationDateKey,
+        .isDirectoryKey,
+        .isRegularFileKey,
+        .totalFileAllocatedSizeKey,
+        .fileAllocatedSizeKey
+    ]
+
+    nonisolated private static let sizeResourceKeys: Set<URLResourceKey> = [
+        .isRegularFileKey,
+        .totalFileAllocatedSizeKey,
+        .fileAllocatedSizeKey
+    ]
+
     nonisolated private static func cleanupItems(in url: URL) -> PathScan {
         // A category path may point at a single file, which is a candidate in
         // its own right rather than a directory to enumerate.
-        guard isDirectory(at: url) else {
-            return .items([cleanupItem(at: url)])
+        let values = try? url.resourceValues(forKeys: itemResourceKeys)
+
+        guard values?.isDirectory == true else {
+            return .items([cleanupItem(at: url, values: values)])
         }
 
         do {
             let childURLs = try FileManager.default.contentsOfDirectory(
                 at: url,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey, .isRegularFileKey],
+                includingPropertiesForKeys: Array(itemResourceKeys),
                 options: []
             )
 
@@ -205,7 +237,7 @@ final class CleanupManager {
             // has Full Disk Access. Anything else falls back to treating the
             // directory itself as a single candidate.
             guard isPermissionError(error) else {
-                return .items([cleanupItem(at: url)])
+                return .items([cleanupItem(at: url, values: values)])
             }
 
             return .permissionDenied
@@ -213,11 +245,20 @@ final class CleanupManager {
     }
 
     nonisolated private static func cleanupItem(at url: URL) -> CleanupItem {
-        CleanupItem(
+        cleanupItem(at: url, values: try? url.resourceValues(forKeys: itemResourceKeys))
+    }
+
+    nonisolated private static func cleanupItem(at url: URL, values: URLResourceValues?) -> CleanupItem {
+        let isDirectory = values?.isDirectory == true
+        let allocatedSize = Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
+
+        return CleanupItem(
             url: url,
-            size: folderSize(at: url),
-            modifiedDate: modifiedDate(for: url),
-            isDirectory: isDirectory(at: url)
+            // Only directories need a recursive walk; a plain file's own allocated
+            // size is already the answer.
+            size: isDirectory ? directorySize(at: url, seededWith: allocatedSize) : allocatedSize,
+            modifiedDate: values?.contentModificationDate,
+            isDirectory: isDirectory
         )
     }
 
@@ -236,26 +277,21 @@ final class CleanupManager {
         return underlyingError.code == Int(EPERM) || underlyingError.code == Int(EACCES)
     }
 
-    nonisolated private static func folderSize(at url: URL) -> Int64 {
-        let resourceKeys: Set<URLResourceKey> = [
-            .isDirectoryKey,
-            .isRegularFileKey,
-            .totalFileAllocatedSizeKey,
-            .fileAllocatedSizeKey
-        ]
-
+    nonisolated private static func directorySize(at url: URL, seededWith allocatedSize: Int64) -> Int64 {
+        // Hidden files are counted: caches and trash are full of dotfiles, and
+        // skipping them under-reports reclaimable space.
         guard let enumerator = FileManager.default.enumerator(
             at: url,
-            includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsHiddenFiles]
+            includingPropertiesForKeys: Array(sizeResourceKeys),
+            options: []
         ) else {
-            return fileSize(at: url)
+            return allocatedSize
         }
 
-        var totalBytes: Int64 = fileSize(at: url)
+        var totalBytes = allocatedSize
 
         for case let fileURL as URL in enumerator {
-            guard let values = try? fileURL.resourceValues(forKeys: resourceKeys) else {
+            guard let values = try? fileURL.resourceValues(forKeys: sizeResourceKeys) else {
                 continue
             }
 
@@ -265,21 +301,5 @@ final class CleanupManager {
         }
 
         return totalBytes
-    }
-
-    nonisolated private static func fileSize(at url: URL) -> Int64 {
-        guard let values = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]) else {
-            return 0
-        }
-
-        return Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
-    }
-
-    nonisolated private static func modifiedDate(for url: URL) -> Date? {
-        try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-    }
-
-    nonisolated private static func isDirectory(at url: URL) -> Bool {
-        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
     }
 }

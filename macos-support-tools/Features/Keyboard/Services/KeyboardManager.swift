@@ -137,7 +137,7 @@ import Observation
         }
     }
 
-    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+    internal func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         if keyboardBlocked {
             return true
         }
@@ -146,12 +146,11 @@ import Observation
             return false
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
         guard type == .keyDown else {
             return false
         }
 
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
