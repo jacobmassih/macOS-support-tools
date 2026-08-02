@@ -158,12 +158,13 @@ import Observation
         saveDeviceSettings()
     }
 
-    internal func removeDevice(_ device: MouseDevice) {
-        connectedDevices.removeAll { $0.id == device.id }
+    internal func removeDevice(withID id: String) {
+        connectedDevices.removeAll { $0.id == id }
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
-        connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
+        connectedDevices.removeAll()
+        devices.forEach(addDevice)
     }
     
     internal func getCurrentActiveDevice() -> MouseDevice? {
@@ -195,14 +196,6 @@ import Observation
     private func updateConnectedDevice(_ device: MouseDevice) {
         guard let index = connectedDevices.firstIndex(where: { $0.id == device.id }) else { return }
         connectedDevices[index] = device
-    }
-
-    private func uniqueDevices(_ devices: [MouseDevice]) -> [MouseDevice] {
-        var seenIDs = Set<String>()
-
-        return devices.filter { device in
-            seenIDs.insert(device.id).inserted
-        }
     }
 
     private func restoredDeviceSettings(for device: MouseDevice) -> MouseDevice {
