@@ -26,7 +26,6 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 
 struct SettingsRootView: View {
     @Environment(MouseManager.self) private var mouseManager
-    @State private var launchAtLogin = LaunchAtLogin()
     @State private var selectedSection: SettingsSection? = .overview
 
     var body: some View {
@@ -41,7 +40,7 @@ struct SettingsRootView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     switch selectedSection ?? .overview {
                     case .overview:
-                        OverviewSettingsView(launchAtLogin: launchAtLogin)
+                        OverviewSettingsView()
                     case .mouse:
                         MouseSettingsView()
                     case .keyboard:
@@ -53,7 +52,7 @@ struct SettingsRootView: View {
                     case .devices:
                         DeviceSettingsView()
                     case .app:
-                        AppSettingsView(launchAtLogin: launchAtLogin)
+                        AppSettingsView()
                     }
                 }
                 .padding(28)
@@ -63,9 +62,6 @@ struct SettingsRootView: View {
             .background(.background)
         }
         .frame(minWidth: 820, minHeight: 560)
-        .onAppear {
-            launchAtLogin.refresh()
-        }
     }
 }
 
@@ -77,4 +73,5 @@ struct SettingsRootView: View {
         .environment(KeyboardManager(accessibilityManager: accessibilityManager))
         .environment(MouseManager(accessibilityManager: accessibilityManager))
         .environment(CleanupManager())
+        .environment(LaunchAtLogin())
 }
