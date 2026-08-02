@@ -11,7 +11,7 @@ extension CGEventType {
     /// specific type afterwards, because blindly re-arming a tap that suppresses
     /// every key would defeat the user's way out, and because only a stall should
     /// count against the timeout budget in `EventTapTimeoutBreaker`.
-    var isTapDisabledEvent: Bool {
+    nonisolated var isTapDisabledEvent: Bool {
         self == .tapDisabledByTimeout || self == .tapDisabledByUserInput
     }
 }

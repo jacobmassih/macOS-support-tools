@@ -116,19 +116,19 @@ nonisolated func keyboardEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     let controller = Unmanaged<KeyboardEventTapController>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
         controller.handleTapDisabled(type)
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if controller.shouldSuppressEvent(event, type: type) {
         return nil
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }

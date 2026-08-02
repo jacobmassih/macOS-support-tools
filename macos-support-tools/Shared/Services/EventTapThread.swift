@@ -54,7 +54,7 @@ nonisolated final class EventTapThread: @unchecked Sendable {
     /// that would run the callback has already moved past it, so a tap can never
     /// fire against a deallocated `refcon`. Calls already on the tap thread run
     /// inline, so re-entering from inside a callback cannot deadlock.
-    func performAndWait(_ work: () -> Void) {
+    func performAndWait(_ work: @escaping () -> Void) {
         guard !isCurrent else {
             work()
             return
@@ -63,14 +63,12 @@ nonisolated final class EventTapThread: @unchecked Sendable {
         let runLoop = targetRunLoop
         let finished = DispatchSemaphore(value: 0)
 
-        withoutActuallyEscaping(work) { work in
-            CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes.rawValue) {
-                work()
-                finished.signal()
-            }
-            CFRunLoopWakeUp(runLoop)
-            finished.wait()
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.commonModes.rawValue) {
+            work()
+            finished.signal()
         }
+        CFRunLoopWakeUp(runLoop)
+        finished.wait()
     }
 
     private func runUntilProcessExit() {

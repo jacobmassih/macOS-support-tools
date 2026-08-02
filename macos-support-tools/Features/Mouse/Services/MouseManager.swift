@@ -168,8 +168,8 @@ import Observation
         syncTapConfiguration()
     }
 
-    internal func removeDevice(_ device: MouseDevice) {
-        connectedDevices.removeAll { $0.id == device.id }
+    internal func removeDevice(withID id: String) {
+        connectedDevices.removeAll { $0.id == id }
         syncTapConfiguration()
     }
 

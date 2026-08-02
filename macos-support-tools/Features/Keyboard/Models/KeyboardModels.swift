@@ -1,6 +1,6 @@
 import CoreGraphics
 
-struct KeyboardDebounceFilter {
+nonisolated struct KeyboardDebounceFilter: Sendable {
     private var lastKeyDownTimestampByKeyCode: [Int64: CGEventTimestamp] = [:]
 
     mutating func shouldSuppressKeyDown(

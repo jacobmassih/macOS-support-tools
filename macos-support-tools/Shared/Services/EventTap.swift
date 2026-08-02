@@ -61,8 +61,8 @@ nonisolated final class EventTap: @unchecked Sendable {
     ) -> Bool {
         var didInstall = false
 
-        tapThread.performAndWait {
-            didInstall = installOnTapThread(
+        tapThread.performAndWait { [self] in
+            didInstall = self.installOnTapThread(
                 eventMask: eventMask,
                 callback: callback,
                 target: target
@@ -75,8 +75,8 @@ nonisolated final class EventTap: @unchecked Sendable {
     /// Re-arms a tap the system disabled. Use this only for disables that are not
     /// a stall; `reenableAfterTimeout()` is the path for timeouts.
     func reenable() {
-        tapThread.performAndWait {
-            guard let machPort else { return }
+        tapThread.performAndWait { [self] in
+            guard let machPort = self.machPort else { return }
 
             CGEvent.tapEnable(tap: machPort, enable: true)
         }
@@ -90,16 +90,16 @@ nonisolated final class EventTap: @unchecked Sendable {
     func reenableAfterTimeout() -> Bool {
         var didReenable = false
 
-        tapThread.performAndWait {
-            didReenable = reenableAfterTimeoutOnTapThread()
+        tapThread.performAndWait { [self] in
+            didReenable = self.reenableAfterTimeoutOnTapThread()
         }
 
         return didReenable
     }
 
     func uninstall() {
-        tapThread.performAndWait {
-            uninstallOnTapThread()
+        tapThread.performAndWait { [self] in
+            self.uninstallOnTapThread()
         }
     }
 

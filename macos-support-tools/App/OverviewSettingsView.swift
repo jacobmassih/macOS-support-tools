@@ -2,7 +2,7 @@ import SwiftUI
 
 struct OverviewSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
-    let launchAtLogin: LaunchAtLogin
+    @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
 
     /// Idle is not a fault: the taps are torn down whenever no feature needs one,
     /// so it reads like the other "nothing connected" pills rather than a warning.

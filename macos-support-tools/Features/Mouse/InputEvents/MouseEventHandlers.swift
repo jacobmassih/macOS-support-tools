@@ -16,9 +16,7 @@ func deviceAddedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, se
 func deviceRemovedCallback(context: UnsafeMutableRawPointer?, result: IOReturn, sender: UnsafeMutableRawPointer?, device: IOHIDDevice) {
     let manager = Unmanaged<MouseManager>.fromOpaque(context!).takeUnretainedValue()
     DispatchQueue.main.async {
-        if let removedDevice = manager.createMouseDevice(from: device) {
-            manager.removeDevice(removedDevice)
-        }
+        manager.removeDevice(withID: device.deviceID)
     }
 }
 
@@ -35,52 +33,60 @@ nonisolated func scrollEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     let controller = Unmanaged<MouseEventTapController>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
         controller.handleScrollTapDisabled(type)
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
-    // Only apply scroll reversal if we have external mouse connected and conditions are met
+    // Only apply scroll reversal if we have an external mouse connected and
+    // natural scrolling is disabled in the published settings snapshot.
     if controller.settings.shouldReverseScroll {
-        // Get the scroll deltas
-        let deltaY = event.getDoubleValueField(.scrollWheelEventDeltaAxis2)
-        let deltaX = event.getDoubleValueField(.scrollWheelEventDeltaAxis1)
-        
-        // Check for momentum scrolling phases - trackpad specific
-        let scrollPhase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
-        let momentumPhase = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
-        
-        // If this has momentum phases, it's from trackpad - skip it completely
-        if scrollPhase != 0 || momentumPhase != 0 {
-            return Unmanaged.passRetained(event)
-        }
-        
-        // Check if this looks like discrete wheel scrolling (mouse)
-        // Mouse wheels typically generate integer or near-integer values
-        let isDiscreteScrolling = (abs(deltaY - round(deltaY)) < 0.01) || (abs(deltaX - round(deltaX)) < 0.01)
-        
-        // Only apply reversal to discrete scrolling events (mouse wheels)
-        if isDiscreteScrolling && (abs(deltaY) >= 1.0 || abs(deltaX) >= 1.0) {
-            // This appears to be a mouse wheel event - apply reversal
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: deltaY * -1)
-            event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: deltaX * -1)
-            
-            // Also reverse point deltas if they exist
-            let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-            let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-            if pointDeltaY != 0 || pointDeltaX != 0 {
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltaY * -1)
-                event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltaX * -1)
-            }
-        }
+        reverseScrollIfNeeded(event)
     }
-    
-    return Unmanaged.passRetained(event)
+
+    return Unmanaged.passUnretained(event)
+}
+
+nonisolated func reverseScrollIfNeeded(_ event: CGEvent) {
+    guard let reversal = ScrollReversalPolicy.reversal(for: event.scrollEventDescriptor) else {
+        return
+    }
+
+    event.applyScrollReversal(reversal)
+}
+
+extension CGEvent {
+    nonisolated var scrollEventDescriptor: ScrollEventDescriptor {
+        ScrollEventDescriptor(
+            deltas: ScrollWheelDeltas(
+                vertical: getDoubleValueField(.scrollWheelEventDeltaAxis1),
+                horizontal: getDoubleValueField(.scrollWheelEventDeltaAxis2)
+            ),
+            pointDeltas: ScrollWheelDeltas(
+                vertical: getDoubleValueField(.scrollWheelEventPointDeltaAxis1),
+                horizontal: getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+            ),
+            scrollPhase: getIntegerValueField(.scrollWheelEventScrollPhase),
+            momentumPhase: getIntegerValueField(.scrollWheelEventMomentumPhase)
+        )
+    }
+
+    nonisolated func applyScrollReversal(_ reversal: ScrollReversal) {
+        setDoubleValueField(.scrollWheelEventDeltaAxis1, value: reversal.deltas.vertical)
+        setDoubleValueField(.scrollWheelEventDeltaAxis2, value: reversal.deltas.horizontal)
+
+        guard let pointDeltas = reversal.pointDeltas else {
+            return
+        }
+
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: pointDeltas.vertical)
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: pointDeltas.horizontal)
+    }
 }
 
 nonisolated func buttonEventCallback(
@@ -90,14 +96,14 @@ nonisolated func buttonEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     let controller = Unmanaged<MouseEventTapController>.fromOpaque(refcon).takeUnretainedValue()
 
     if type.isTapDisabledEvent {
         controller.handleButtonTapDisabled(type)
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     // Buttons the user has not claimed, and every button while Citrix passthrough
@@ -122,7 +128,7 @@ nonisolated func buttonEventCallback(
         break
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Button Action Handler
@@ -131,7 +137,7 @@ nonisolated private func handleButtonAction(event: CGEvent, action: MouseButtonA
     // Only handle button down events to avoid duplicate actions
     let eventType = event.type
     if eventType != .otherMouseDown {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     switch action {
@@ -158,7 +164,7 @@ nonisolated private func handleButtonAction(event: CGEvent, action: MouseButtonA
         break
     }
     
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Utility Functions
