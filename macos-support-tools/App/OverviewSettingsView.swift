@@ -2,7 +2,7 @@ import SwiftUI
 
 struct OverviewSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
-    let launchAtLogin: LaunchAtLogin
+    @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
 
     var body: some View {
         @Bindable var mouseManager = mouseManager

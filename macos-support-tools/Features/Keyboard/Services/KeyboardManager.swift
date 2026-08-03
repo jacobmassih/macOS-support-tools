@@ -47,8 +47,7 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
-    @ObservationIgnored private let keyboardTap = EventTap()
-    @ObservationIgnored private var keyboardEventMask: CGEventMask?
+    @ObservationIgnored private let keyboardTap = EventTap(label: "keyboard")
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -81,7 +80,7 @@ import Observation
         if let accessibilityPermissionObserverID {
             accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
-        disableKeyboardEventTap()
+        keyboardTap.uninstall()
     }
 
     func startSystemServices() {
@@ -100,17 +99,15 @@ import Observation
         guard hasStartedSystemServices else { return }
 
         guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {
-            disableKeyboardEventTap()
+            keyboardTap.uninstall()
             return
         }
 
-        let eventMask = keyboardEventMaskForCurrentFeatures()
-        if !keyboardTap.isInstalled {
-            setupKeyboardEventTap(eventMask: eventMask)
-        } else if keyboardEventMask != eventMask {
-            disableKeyboardEventTap()
-            setupKeyboardEventTap(eventMask: eventMask)
-        }
+        keyboardTap.install(
+            eventMask: keyboardEventMaskForCurrentFeatures(),
+            callback: keyboardEventCallback,
+            target: self
+        )
     }
 
     private func keyboardEventMaskForCurrentFeatures() -> CGEventMask {
@@ -122,23 +119,6 @@ import Observation
         }
 
         return CGEventMask(eventMask)
-    }
-
-    private func setupKeyboardEventTap(eventMask: CGEventMask) {
-        guard !keyboardTap.isInstalled else { return }
-
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-
-        guard keyboardTap.install(
-            eventMask: eventMask,
-            callback: keyboardEventCallback,
-            userInfo: context
-        ) else {
-            print("Failed to create keyboard event tap. App may need accessibility permissions.")
-            return
-        }
-
-        keyboardEventMask = eventMask
     }
 
     fileprivate func reenableKeyboardEventTap() {
@@ -165,12 +145,7 @@ import Observation
         }
     }
 
-    private func disableKeyboardEventTap() {
-        keyboardTap.uninstall()
-        keyboardEventMask = nil
-    }
-
-    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+    internal func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         if keyboardBlocked {
             return true
         }
@@ -179,12 +154,11 @@ import Observation
             return false
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
         guard type == .keyDown else {
             return false
         }
 
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
