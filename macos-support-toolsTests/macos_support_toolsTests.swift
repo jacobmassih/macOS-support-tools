@@ -1040,6 +1040,23 @@ struct macos_support_toolsTests {
         #expect(!CGEventType.keyDown.isTapDisabledEvent)
     }
 
+    @Test func eventTapCallbacksDoNotRetainPassThroughEvents() throws {
+        let callbacks: [(CGEventTapCallBack, CGEventType)] = [
+            (scrollEventCallback, .scrollWheel),
+            (buttonEventCallback, .otherMouseDown),
+            (keyboardEventCallback, .keyDown)
+        ]
+
+        for (callback, type) in callbacks {
+            let event = try #require(CGEvent(source: nil))
+            let retainCountBeforeCallback = CFGetRetainCount(event)
+            let result = try invokeRawTapCallback(callback, type: type, event: event)
+
+            #expect(result?.toOpaque() == Unmanaged.passUnretained(event).toOpaque())
+            #expect(CFGetRetainCount(event) == retainCountBeforeCallback)
+        }
+    }
+
     @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
         let suiteName = "MouseTapDisabledTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
@@ -1468,7 +1485,16 @@ private func invokeTapCallback(
     let proxy = try #require(OpaquePointer(bitPattern: 1))
 
     let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
-    return callback(proxy, type, event, refcon)?.takeRetainedValue()
+    return callback(proxy, type, event, refcon)?.takeUnretainedValue()
+}
+
+private func invokeRawTapCallback(
+    _ callback: CGEventTapCallBack,
+    type: CGEventType,
+    event: CGEvent
+) throws -> Unmanaged<CGEvent>? {
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
+    return callback(proxy, type, event, nil)
 }
 
 private final class TrashRecorder: @unchecked Sendable {
