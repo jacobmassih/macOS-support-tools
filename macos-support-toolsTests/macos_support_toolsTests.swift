@@ -1171,6 +1171,69 @@ struct macos_support_toolsTests {
         }
     }
 
+    // `object(forKey:)` also reports registration-domain values, so it cannot tell
+    // a registered fallback apart from a stored one. `persistentDomain(forName:)`
+    // sees only what was actually written, which is what these tests care about.
+    @Test func mouseManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "MouseManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[MouseManager.DefaultsKey.mouseButtonsEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.naturalScrollEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.citrixPassthroughEnabled] == nil)
+
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.mouseButtonsEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.citrixPassthroughEnabled))
+
+        #expect(manager.mouseButtonsEnabled)
+        #expect(manager.naturalScrollEnabled)
+        #expect(manager.citrixPassthroughEnabled)
+    }
+
+    @Test func keyboardManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "KeyboardManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceEnabled] == nil)
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds] == nil)
+
+        #expect(!userDefaults.bool(forKey: KeyboardManager.DefaultsKey.keyboardDebounceEnabled))
+        #expect(
+            userDefaults.double(forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+                == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds
+        )
+
+        #expect(!manager.keyboardDebounceEnabled)
+        #expect(manager.keyboardDebounceDelayMilliseconds == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds)
+    }
+
+    @Test func keyboardManagerClampsPersistedDebounceWindowOnLoad() throws {
+        let suiteName = "KeyboardManagerPersistedClampTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        userDefaults.set(500, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 100)
+
+        userDefaults.set(1, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 5)
+    }
+
     @Test func launchAtLoginRefreshReflectsRegistrationState() {
         let registration = LaunchAtLoginRegistrationStub()
         let launchAtLogin = LaunchAtLogin(
