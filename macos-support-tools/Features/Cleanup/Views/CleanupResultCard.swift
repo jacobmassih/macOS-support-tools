@@ -34,12 +34,22 @@ struct CleanupResultCard: View {
                 Spacer(minLength: 16)
 
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
-                        .font(.title3.weight(.semibold))
+                    if result.accessState.requiresFullDiskAccess {
+                        Text("Unavailable")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-                    Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Text("Permission needed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
+                            .font(.title3.weight(.semibold))
+
+                        Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Button {
@@ -63,7 +73,9 @@ struct CleanupResultCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if result.items.isEmpty {
+            if result.accessState.requiresFullDiskAccess {
+                CleanupPermissionNotice(category: result.category)
+            } else if result.items.isEmpty {
                 Label("No candidate files found.", systemImage: "checkmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -71,6 +83,42 @@ struct CleanupResultCard: View {
                 CleanupPreviewDetails(result: result)
             }
         }
+    }
+}
+
+private struct CleanupPermissionNotice: View {
+    let category: CleanupCategory
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Full Disk Access required", systemImage: "exclamationmark.triangle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text("macOS blocked this app from reading \(category.title), so its size could not be measured. Grant Full Disk Access, then scan again.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                FullDiskAccessButton()
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                if let path = category.paths.first {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([path])
+                    } label: {
+                        Label("Show in Finder", systemImage: "arrow.up.right.square")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
