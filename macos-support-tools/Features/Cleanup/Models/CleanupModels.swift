@@ -24,6 +24,19 @@ enum CleanupRiskLevel: String, Codable {
     }
 }
 
+/// Whether a scanned category could actually be read.
+///
+/// Without this, a directory the app is refused access to is indistinguishable
+/// from an empty one: both report zero bytes and zero items.
+enum CleanupAccessState: String, Codable {
+    case accessible
+    case permissionDenied
+
+    var requiresFullDiskAccess: Bool {
+        self == .permissionDenied
+    }
+}
+
 struct CleanupCategory: Identifiable, Codable {
     let id: CleanupCategoryID
     let title: String
@@ -53,6 +66,12 @@ struct CleanupScanResult: Identifiable, Codable {
     let totalBytes: Int64
     let itemCount: Int
     let items: [CleanupItem]
+    var accessState: CleanupAccessState = .accessible
+
+    /// `true` only when the category was readable and genuinely held nothing.
+    var isEmpty: Bool {
+        accessState == .accessible && items.isEmpty
+    }
 
     var largestItem: CleanupItem? {
         items.max { $0.size < $1.size }
