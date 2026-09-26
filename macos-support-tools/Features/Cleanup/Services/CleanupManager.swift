@@ -12,6 +12,7 @@ final class CleanupManager {
     private(set) var lastScanDate: Date?
     private(set) var lastCleanupResult: CleanupRunResult?
     private(set) var lastError: String?
+    private(set) var isMissingTrashAccess = false
 
     var totalReclaimableBytes: Int64 {
         scanResults.reduce(0) { $0 + $1.totalBytes }
@@ -37,6 +38,7 @@ final class CleanupManager {
     func scan() async {
         isScanning = true
         lastError = nil
+        isMissingTrashAccess = false
 
         let categoriesToScan = categories
 
@@ -63,6 +65,13 @@ final class CleanupManager {
 
             scanResults = results
             lastScanDate = Date()
+            
+            // Check if trash category exists but has 0 items (permission issue)
+            let trashResult = scanResults.first { $0.category.id == .trash }
+            let trashPath = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".Trash", directoryHint: .isDirectory)
+            if trashResult?.itemCount == 0 && FileManager.default.fileExists(atPath: trashPath.path) {
+                isMissingTrashAccess = true
+            }
         } catch {
             lastError = error.localizedDescription
         }

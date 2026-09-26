@@ -75,6 +75,19 @@ struct CleanupSettingsView: View {
                     .foregroundStyle(.orange)
             }
 
+        SettingsCard {
+            PermissionStatusRow(
+                title: "Full Disk Access",
+                isGranted: !cleanupManager.isMissingTrashAccess
+            )
+
+            if cleanupManager.isMissingTrashAccess {
+                Divider()
+
+                FullDiskAccessButton()
+            }
+        }
+
             if let lastCleanupResult = cleanupManager.lastCleanupResult {
                 Divider()
 
