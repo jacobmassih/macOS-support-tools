@@ -86,6 +86,38 @@ struct macos_support_toolsTests {
         #expect(result.totalBytes >= Int64(payload.count))
     }
 
+    @Test func cleanupScanCountsNestedDirectorySizes() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let trashItemURL = rootURL.appending(path: "trash-item", directoryHint: .isDirectory)
+        let nestedDirURL = trashItemURL.appending(path: "nested", directoryHint: .isDirectory)
+        let fileInNestedURL = nestedDirURL.appending(path: "file.bin")
+        let fileData = Data(repeating: 0xCD, count: 8192)
+
+        try fileManager.createDirectory(at: nestedDirURL, withIntermediateDirectories: true)
+        try fileData.write(to: fileInNestedURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.isDirectory == true)
+        // Verify that nested directory size is included in total
+        #expect(result.totalBytes >= Int64(fileData.count))
+    }
+
     @Test func cleanupScanIgnoresZeroByteCandidates() throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
@@ -405,6 +437,34 @@ struct macos_support_toolsTests {
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.isEmpty == true)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
+    }
+
+    @Test @MainActor func cleanupManagerDetectsMissingTrashAccess() async throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+       let trashDirURL = rootURL.appending(path: ".Trash", directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: trashDirURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let manager = CleanupManager(categories: [
+           CleanupCategory(
+               id: .trash,
+               title: "Trash",
+               subtitle: "Test trash",
+               systemImage: "trash",
+               paths: [trashDirURL],
+               riskLevel: .review
+           )
+       ])
+
+       await manager.scan()
+
+       // Empty trash directory with 0 items should trigger permission flag
+       #expect(manager.isMissingTrashAccess == true)
     }
 
     @Test @MainActor func cleanupManagerDefaultCategoriesSelectExpectedPaths() {
