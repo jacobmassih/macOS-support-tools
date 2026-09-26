@@ -233,6 +233,8 @@ final class CleanupManager {
 
             if values.isRegularFile == true {
                 totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+            } else if values.isDirectory == true {
+                totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
             }
         }
 
