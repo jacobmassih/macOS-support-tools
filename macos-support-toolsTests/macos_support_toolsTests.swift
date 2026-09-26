@@ -439,32 +439,59 @@ struct macos_support_toolsTests {
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
     }
 
-    @Test @MainActor func cleanupManagerDetectsMissingTrashAccess() async throws {
+    @Test func cleanupScanReportsTrashReadErrors() throws {
        let fileManager = FileManager.default
        let rootURL = fileManager.temporaryDirectory
            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-       let trashDirURL = rootURL.appending(path: ".Trash", directoryHint: .isDirectory)
 
-       try fileManager.createDirectory(at: trashDirURL, withIntermediateDirectories: true)
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
        defer {
            try? fileManager.removeItem(at: rootURL)
        }
 
-       let manager = CleanupManager(categories: [
-           CleanupCategory(
-               id: .trash,
-               title: "Trash",
-               subtitle: "Test trash",
-               systemImage: "trash",
-               paths: [trashDirURL],
-               riskLevel: .review
-           )
-       ])
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+       let fileClient = CleanupFileClient(
+           contentsOfDirectory: { _ in
+               throw CocoaError(.fileReadNoPermission)
+           }
+       )
 
-       await manager.scan()
+       let result = try CleanupManager.scan(category: category, fileClient: fileClient)
 
-       // Empty trash directory with 0 items should trigger permission flag
-       #expect(manager.isMissingTrashAccess == true)
+       #expect(result.itemCount == 0)
+       #expect(result.accessError?.contains("permission") == true)
+    }
+
+    @Test func cleanupScanTreatsReadableEmptyTrashAsEmpty() throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+
+       let result = try CleanupManager.scan(category: category)
+
+       #expect(result.itemCount == 0)
+       #expect(result.accessError == nil)
     }
 
     @Test @MainActor func cleanupManagerDefaultCategoriesSelectExpectedPaths() {
@@ -1061,7 +1088,8 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: 60,
             itemCount: 3,
-            items: [smallItem, mediumItem, largeItem]
+            items: [smallItem, mediumItem, largeItem],
+            accessError: nil
         )
 
         #expect(scanResult.largestItem?.url == largeItem.url)
@@ -1082,7 +1110,8 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: item.size,
             itemCount: 1,
-            items: [item]
+            items: [item],
+            accessError: nil
         )
 
         #expect(CleanupCategoryID.logs.id == "logs")

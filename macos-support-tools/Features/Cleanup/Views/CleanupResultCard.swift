@@ -63,10 +63,25 @@ struct CleanupResultCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if result.items.isEmpty {
-                Label("No candidate files found.", systemImage: "checkmark.circle")
+            if result.category.id == .trash, let accessError = result.accessError {
+                Divider()
+
+                Label("Unable to read Trash contents", systemImage: "lock.fill")
+                    .foregroundStyle(.orange)
+
+                Text(accessError)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                FullDiskAccessButton()
+            }
+
+            if result.items.isEmpty {
+                if result.accessError == nil {
+                    Label("No candidate files found.", systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 CleanupPreviewDetails(result: result)
             }

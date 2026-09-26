@@ -53,6 +53,7 @@ struct CleanupScanResult: Identifiable, Codable {
     let totalBytes: Int64
     let itemCount: Int
     let items: [CleanupItem]
+    let accessError: String?
 
     var largestItem: CleanupItem? {
         items.max { $0.size < $1.size }
