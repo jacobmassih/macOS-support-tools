@@ -66,23 +66,6 @@ struct OverviewSettingsView: View {
                 }
             }
 
-            Divider()
-
-            HStack(alignment: .firstTextBaseline) {
-                Text("Version")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(AppVersionInfo.version)
-                    .fontWeight(.medium)
-            }
-
-            HStack(alignment: .firstTextBaseline) {
-                Text("Build")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(AppVersionInfo.build)
-                    .fontWeight(.medium)
-            }
         }
 
         SettingsCard {
