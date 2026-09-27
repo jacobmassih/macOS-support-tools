@@ -8,6 +8,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case citrix = "Citrix"
     case devices = "Devices"
     case app = "App"
+    case about = "About"
 
     var id: Self { self }
 
@@ -20,6 +21,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .citrix: return "rectangle.connected.to.line.below"
         case .devices: return "rectangle.stack.badge.plus"
         case .app: return "gearshape"
+        case .about: return "info.circle"
         }
     }
 }
@@ -53,6 +55,8 @@ struct SettingsRootView: View {
                         DeviceSettingsView()
                     case .app:
                         AppSettingsView()
+                    case .about:
+                        AboutSettingsView()
                     }
                 }
                 .padding(28)
