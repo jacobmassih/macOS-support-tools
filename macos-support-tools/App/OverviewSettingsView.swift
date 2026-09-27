@@ -50,22 +50,14 @@ struct OverviewSettingsView: View {
             }
         }
 
-        SettingsCard(spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "app.badge")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.blue)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(AppVersionInfo.displayName)
-                        .font(.title3.weight(.semibold))
-
-                    Text(AppVersionInfo.fullVersion)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
+        SettingsCard {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Version")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(AppVersionInfo.version)
+                    .fontWeight(.medium)
             }
-
         }
 
         SettingsCard {
