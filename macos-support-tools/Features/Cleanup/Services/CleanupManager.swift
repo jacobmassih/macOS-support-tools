@@ -220,37 +220,40 @@ final class CleanupManager {
 
         return CleanupItem(
             url: url,
-            // Only directories need a recursive walk; a plain file's own allocated
-            // size is already the answer.
-            size: isDirectory ? directorySize(at: url, seededWith: allocatedSize) : allocatedSize,
+            // Only regular files use their own allocation metadata directly. Directories
+            // need a recursive walk over the subtree and should not count the directory
+            // entry's own footprint as if it were nested file content.
+            size: isDirectory ? directorySize(at: url) : allocatedSize,
             modifiedDate: values?.contentModificationDate,
             isDirectory: isDirectory
         )
     }
 
-    nonisolated private static func directorySize(at url: URL, seededWith allocatedSize: Int64) -> Int64 {
+    nonisolated private static func directorySize(at url: URL) -> Int64 {
         // Hidden files are counted: caches and trash are full of dotfiles, and
-        // skipping them under-reports reclaimable space.
+        // skipping them under-reports reclaimable space. For recursive size we only
+        // sum actual regular-file entries; directory metadata is not a measure of
+        // the contents beneath that folder.
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: Array(sizeResourceKeys),
             options: []
         ) else {
-            return allocatedSize
+            return 0
         }
 
-        var totalBytes = allocatedSize
+        var totalBytes: Int64 = 0
 
         for case let fileURL as URL in enumerator {
             guard let values = try? fileURL.resourceValues(forKeys: sizeResourceKeys) else {
                 continue
             }
 
-            if values.isRegularFile == true {
-                totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
-            } else if values.isDirectory == true {
-                totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+            guard values.isRegularFile == true else {
+                continue
             }
+
+            totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
         }
 
         return totalBytes
