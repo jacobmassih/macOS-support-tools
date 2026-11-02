@@ -55,12 +55,40 @@ struct CleanupScanResult: Identifiable, Codable {
     let items: [CleanupItem]
     let accessError: String?
 
-    var largestItem: CleanupItem? {
-        items.max { $0.size < $1.size }
+    let largestItem: CleanupItem?
+    let mostRecentModifiedDate: Date?
+
+    nonisolated init(
+        category: CleanupCategory,
+        totalBytes: Int64,
+        itemCount: Int,
+        items: [CleanupItem],
+        accessError: String?
+    ) {
+        self.category = category
+        self.totalBytes = totalBytes
+        self.itemCount = itemCount
+        self.items = items
+        self.accessError = accessError
+        largestItem = items.max { $0.size < $1.size }
+        mostRecentModifiedDate = items.lazy.compactMap(\.modifiedDate).max()
     }
 
-    var mostRecentModifiedDate: Date? {
-        items.compactMap(\.modifiedDate).max()
+    // Derived values stay out of the serialized format and are rebuilt when
+    // decoding, so older payloads and newly scanned results behave alike.
+    private enum CodingKeys: String, CodingKey {
+        case category, totalBytes, itemCount, items, accessError
+    }
+
+    nonisolated init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            category: try values.decode(CleanupCategory.self, forKey: .category),
+            totalBytes: try values.decode(Int64.self, forKey: .totalBytes),
+            itemCount: try values.decode(Int.self, forKey: .itemCount),
+            items: try values.decode([CleanupItem].self, forKey: .items),
+            accessError: try values.decodeIfPresent(String.self, forKey: .accessError)
+        )
     }
 }
 
