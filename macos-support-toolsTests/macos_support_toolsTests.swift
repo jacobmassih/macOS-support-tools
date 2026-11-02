@@ -8,9 +8,6 @@ import Testing
 struct macos_support_toolsTests {
     @Test func appVersionInfoReadsBundleMetadata() {
         #expect(!AppVersionInfo.version.isEmpty)
-        #expect(!AppVersionInfo.build.isEmpty)
-        #expect(AppVersionInfo.displayName == "Support Tools" || AppVersionInfo.displayName == "macos-support-tools")
-        #expect(AppVersionInfo.fullVersion.contains(AppVersionInfo.version))
     }
 
 

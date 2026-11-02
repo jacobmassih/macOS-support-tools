@@ -10,7 +10,8 @@ It is built for a simple use case: make external mouse scrolling and side-button
 - Remaps side mouse buttons to back, forward, or middle click behavior
 - Temporarily skips custom side-button handling when Citrix Workspace is the frontmost app
 - Supports launch at login
-- Runs as a menu bar utility instead of a full Dock app
+- Shows a Dock icon while the Settings window is open (including when minimized)
+- Returns to menu-bar-only mode when Settings is closed; input features keep running
 
 ## How It Works
 
