@@ -1592,3 +1592,74 @@ private struct TrashRecorderError: LocalizedError {
         "Trash failed for \(url.lastPathComponent)"
     }
 }
+
+private final class RecordingMouseTaps: MouseEventTapControlling {
+    var isScrollTapInstalled = false
+    var isButtonTapInstalled = false
+    var installationFails = false
+    func setupScrollEventTap() { isScrollTapInstalled = !installationFails }
+    func setupButtonEventTap() { isButtonTapInstalled = !installationFails }
+    func disableScrollEventTap() { isScrollTapInstalled = false }
+    func disableButtonEventTap() { isButtonTapInstalled = false }
+    func reenableScrollEventTap() {}
+    func reenableButtonEventTap() {}
+}
+
+extension macos_support_toolsTests {
+    @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
+        let suite = "ConditionalMouseTaps-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = AccessibilityManager()
+        access.isAccessibilityEnabled = true
+        let taps = RecordingMouseTaps()
+        let manager = MouseManager(userDefaults: defaults, accessibilityManager: access, eventTapController: taps)
+        let device = makeMouseDevice()
+        manager.setDetectedDevices([device])
+        manager.naturalScrollEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        manager.startSystemServices()
+        manager.setDetectedDevices([])
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - No mouse features in use")
+        manager.addDevice(device)
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.startSystemServices()
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+
+        manager.naturalScrollEnabled = true
+        #expect(!taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.mouseButtonsEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - No mouse features in use")
+        manager.naturalScrollEnabled = false
+        #expect(taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.mouseButtonsEnabled = true
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: true)
+        #expect(taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .none)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .forward)
+        #expect(taps.isButtonTapInstalled)
+
+        access.isAccessibilityEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - Accessibility permission required")
+        access.isAccessibilityEnabled = true
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        manager.removeDevice(withID: device.id)
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        taps.installationFails = true
+        manager.addDevice(device)
+        #expect(manager.tapStatus == "Inactive - Event tap unavailable")
+    }
+}
