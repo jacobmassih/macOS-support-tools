@@ -11,7 +11,9 @@ import Observation
         static let citrixPassthroughEnabled = "CitrixPassthroughEnabled"
     }
 
-    var connectedDevices: [MouseDevice] = []
+    var connectedDevices: [MouseDevice] = [] {
+        didSet { syncTapConfiguration() }
+    }
     var deviceSettings: [String: MouseDevice] = [:]
     var isAnyExternalMouseConnected: Bool { !connectedDevices.isEmpty }
     var isAccessibilityEnabled: Bool {
@@ -45,12 +47,13 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
-    @ObservationIgnored private(set) var eventTapController: MouseEventTapController!
+    @ObservationIgnored private(set) var eventTapController: (any MouseEventTapControlling)!
 
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
-        accessibilityManager: AccessibilityManager
+        accessibilityManager: AccessibilityManager,
+        eventTapController: (any MouseEventTapControlling)? = nil
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
@@ -71,7 +74,7 @@ import Observation
         self.citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
 
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
-        self.eventTapController = MouseEventTapController { [weak self] in
+        self.eventTapController = eventTapController ?? MouseEventTapController { [weak self] in
             // A tap can be left disabled from the tap thread, so bring the news
             // back to the main thread before touching observable state.
             DispatchQueue.main.async {
@@ -125,7 +128,6 @@ import Observation
         deviceSettings[deviceId] = device
         updateConnectedDevice(device)
         saveDeviceSettings()
-        syncTapConfiguration()
     }
 
     func updateButtonAction(for deviceId: String, buttonType: MouseButtonType, action: MouseButtonAction) {
@@ -141,7 +143,6 @@ import Observation
         deviceSettings[deviceId] = device
         updateConnectedDevice(device)
         saveDeviceSettings()
-        syncTapConfiguration()
     }
 
     internal func createMouseDevice(from ioDevice: IOHIDDevice) -> MouseDevice? {
@@ -170,18 +171,20 @@ import Observation
         connectedDevices.append(restoredDevice)
         deviceSettings[device.id] = restoredDevice
         saveDeviceSettings()
-        syncTapConfiguration()
     }
 
     internal func removeDevice(withID id: String) {
         connectedDevices.removeAll { $0.id == id }
-        syncTapConfiguration()
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
-        connectedDevices.removeAll()
-        devices.forEach(addDevice)
-        syncTapConfiguration()
+        var seen = Set<String>()
+        let restoredDevices = devices.filter { seen.insert($0.id).inserted }.map(restoredDeviceSettings)
+        for device in restoredDevices {
+            deviceSettings[device.id] = device
+        }
+        connectedDevices = restoredDevices
+        saveDeviceSettings()
     }
 
     internal func getCurrentActiveDevice() -> MouseDevice? {
@@ -214,7 +217,9 @@ import Observation
     /// Likewise for side buttons: with no connected device configured to override
     /// one, the tap would forward every click untouched.
     private var isButtonTapNeeded: Bool {
-        mouseButtonsEnabled && connectedDevices.contains { $0.button4Enabled || $0.button5Enabled }
+        guard mouseButtonsEnabled, let device = getCurrentActiveDevice() else { return false }
+        return (device.button4Enabled && device.button4Action != .none)
+            || (device.button5Enabled && device.button5Action != .none)
     }
 
     /// Republishes what the tap callbacks read and matches the installed taps to

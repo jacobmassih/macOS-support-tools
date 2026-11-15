@@ -370,6 +370,8 @@ struct macos_support_toolsTests {
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.map { $0.item.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
         #expect(manager.scanResults.first?.items.map { $0.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
+        #expect(manager.scanResults.first?.largestItem?.url.resolvingSymlinksInPath() == secondURL.resolvingSymlinksInPath())
+        #expect(manager.scanResults.first?.mostRecentModifiedDate == manager.scanResults.first?.items.first?.modifiedDate)
         #expect(manager.totalReclaimableBytes == manager.scanResults.first?.totalBytes)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
     }
@@ -1104,6 +1106,27 @@ struct macos_support_toolsTests {
         #expect(scanResult.mostRecentModifiedDate == newerDate)
     }
 
+    @Test @MainActor func cleanupScanSummaryHandlesEmptyAndUndatedItems() {
+        let category = CleanupCatalog.defaultCategories()[0]
+        let undated = CleanupItem(url: URL(filePath: "/tmp/undated"), size: 10, modifiedDate: nil)
+        for items in [[undated], []] {
+            let result = CleanupScanResult(category: category, totalBytes: items.reduce(0) { $0 + $1.size }, itemCount: items.count, items: items, accessError: nil)
+            #expect(result.largestItem?.url == items.first?.url)
+            #expect(result.mostRecentModifiedDate == nil)
+        }
+    }
+
+    @Test @MainActor func cleanupByteFormattingMatchesConfiguredFormatterAcrossRepeatedCalls() {
+        let reference = ByteCountFormatter()
+        reference.allowedUnits = [.useBytes, .useKB, .useMB, .useGB, .useTB]
+        reference.countStyle = .file
+        reference.includesUnit = true
+        reference.isAdaptive = true
+        for bytes: Int64 in [0, 1, 1024, 5_000_000, 1_000_000_000_000, 1024, 0] {
+            #expect(ByteCountFormatter.cleanupString(fromByteCount: bytes) == reference.string(fromByteCount: bytes))
+        }
+    }
+
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
         let item = CleanupItem(url: URL(filePath: "/tmp/model-item"), size: 1, modifiedDate: nil)
         let category = CleanupCategory(
@@ -1214,7 +1237,7 @@ struct macos_support_toolsTests {
         #expect(keyDownResult == nil)
     }
 
-    @Test func keyboardTapDisabledByUserInputReleasesKeyboardBlock() async throws {
+    @Test @MainActor func keyboardTapDisabledByUserInputReleasesKeyboardBlock() async throws {
         let suiteName = "KeyboardUserInputDisableTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
@@ -1234,7 +1257,9 @@ struct macos_support_toolsTests {
         #expect(result === notification)
 
         // The release is hopped off the tap callback, so drain the main queue.
-        await MainActor.run {}
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
 
         // The OS-level escape from Block Keyboard must actually unblock it,
         // otherwise the toggle claims to be blocking a keyboard that works.
@@ -1915,5 +1940,119 @@ private struct TrashRecorderError: LocalizedError {
 
     var errorDescription: String? {
         "Trash failed for \(url.lastPathComponent)"
+    }
+}
+
+private final class RecordingMouseTaps: MouseEventTapControlling {
+    var settings = MouseTapSettings()
+    var isScrollTapInstalled = false
+    var isButtonTapInstalled = false
+    var needsAnyMouseEventTap = false
+    var hasRequiredMouseEventTaps = true
+    var isDisabledByRepeatedTimeouts = false
+    var installationFails = false
+    func updateSettings(_ settings: MouseTapSettings) { self.settings = settings }
+    func updateTaps(scrollTapNeeded: Bool, buttonTapNeeded: Bool, isAccessibilityEnabled: Bool) {
+        needsAnyMouseEventTap = scrollTapNeeded || buttonTapNeeded
+        isScrollTapInstalled = scrollTapNeeded && isAccessibilityEnabled && !installationFails
+        isButtonTapInstalled = buttonTapNeeded && isAccessibilityEnabled && !installationFails
+        hasRequiredMouseEventTaps = (!scrollTapNeeded || isScrollTapInstalled)
+            && (!buttonTapNeeded || isButtonTapInstalled)
+    }
+    func disableAllTaps() {
+        isScrollTapInstalled = false
+        isButtonTapInstalled = false
+        needsAnyMouseEventTap = false
+        hasRequiredMouseEventTaps = true
+    }
+}
+
+extension macos_support_toolsTests {
+    @Test nonisolated func eventTapWorkRunsOffMainAndSupportsReentry() {
+        let results = OSAllocatedUnfairLock(initialState: [Bool]())
+        EventTapThread.shared.performAndWait {
+            results.withLock { $0.append(!Thread.isMainThread) }
+            EventTapThread.shared.performAndWait {
+                results.withLock { $0.append(!Thread.isMainThread) }
+            }
+        }
+        #expect(results.withLock { $0 } == [true, true])
+    }
+
+    @MainActor @Test func mouseTapGatingFollowsOnlyTheFirstDevice() {
+        let suite = "FirstMouseTap-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = AccessibilityManager()
+        access.isAccessibilityEnabled = true
+        let taps = RecordingMouseTaps()
+        let manager = MouseManager(userDefaults: defaults, accessibilityManager: access, eventTapController: taps)
+        manager.startSystemServices()
+        let inactive = makeMouseDevice(id: "inactive", button4Action: .none, button5Action: .none)
+        let active = makeMouseDevice(id: "active")
+        manager.setDetectedDevices([inactive, active])
+        #expect(!taps.isButtonTapInstalled)
+        manager.removeDevice(withID: inactive.id)
+        #expect(taps.isButtonTapInstalled)
+        #expect(taps.settings.button4Action == .forward)
+        manager.setDetectedDevices([inactive, active])
+        #expect(!taps.isButtonTapInstalled)
+    }
+
+    @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
+        let suite = "ConditionalMouseTaps-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = AccessibilityManager()
+        access.isAccessibilityEnabled = true
+        let taps = RecordingMouseTaps()
+        let manager = MouseManager(userDefaults: defaults, accessibilityManager: access, eventTapController: taps)
+        let device = makeMouseDevice()
+        manager.setDetectedDevices([device])
+        manager.naturalScrollEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        manager.startSystemServices()
+        manager.setDetectedDevices([])
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .idle)
+        manager.addDevice(device)
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .active)
+        manager.startSystemServices()
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+
+        manager.naturalScrollEnabled = true
+        #expect(!taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .active)
+        manager.mouseButtonsEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .idle)
+        manager.naturalScrollEnabled = false
+        #expect(taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .active)
+        manager.mouseButtonsEnabled = true
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: true)
+        #expect(taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .none)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .forward)
+        #expect(taps.isButtonTapInstalled)
+
+        access.isAccessibilityEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == .accessibilityRequired)
+        access.isAccessibilityEnabled = true
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        manager.removeDevice(withID: device.id)
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        taps.installationFails = true
+        manager.addDevice(device)
+        #expect(manager.tapStatus == .unavailable)
     }
 }

@@ -5,6 +5,7 @@ import Observation
 final class CleanupManager {
     private let fileClient: CleanupFileClient
     private let customCategories: [CleanupCategory]?
+    @ObservationIgnored private var scanTask: Task<[CleanupScanResult], Error>?
 
     private(set) var isScanning = false
     private(set) var isCleaning = false
@@ -35,19 +36,25 @@ final class CleanupManager {
 
     @MainActor
     func scan() async {
+        guard !isScanning, !isCleaning, !Task.isCancelled else { return }
         isScanning = true
         lastError = nil
+        defer {
+            scanTask = nil
+            isScanning = false
+        }
 
         let categoriesToScan = categories
 
-        do {
+        let fileClient = fileClient
+        let task = Task {
+            try Task.checkCancellation()
             // Categories walk unrelated trees, so they scan concurrently. Results are
             // reassembled by index because completion order is not category order.
-            let results = try await withThrowingTaskGroup(
+            return try await withThrowingTaskGroup(
                 of: (offset: Int, result: CleanupScanResult).self
             ) { group in
                 for (offset, category) in categoriesToScan.enumerated() {
-                    let fileClient = fileClient
                     group.addTask(priority: .userInitiated) {
                         (offset, try Self.scan(category: category, fileClient: fileClient))
                     }
@@ -62,17 +69,35 @@ final class CleanupManager {
                 return orderedResults.compactMap { $0 }
             }
 
+        }
+        scanTask = task
+
+        do {
+            let results = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            // Cancellation may arrive after traversal but before publication.
+            try Task.checkCancellation()
+            guard !task.isCancelled else { return }
             scanResults = results
             lastScanDate = Date()
+        } catch is CancellationError {
+            // Keep the last completed scan; cancelling is not an access error.
         } catch {
             lastError = error.localizedDescription
         }
+    }
 
-        isScanning = false
+    @MainActor
+    func cancelScan() {
+        scanTask?.cancel()
     }
 
     @MainActor
     func clean(items: [CleanupItem]) async {
+        guard !isScanning, !isCleaning else { return }
         guard !items.isEmpty else {
             lastCleanupResult = CleanupRunResult(trashedItems: [], skippedItems: [])
             return
@@ -99,6 +124,7 @@ final class CleanupManager {
 
     @MainActor
     func clearAllCaches() async {
+        guard !isScanning, !isCleaning else { return }
         guard let cacheResult = scanResults.first(where: { $0.category.id == .userCaches }) else {
             lastError = "Run a scan before clearing caches."
             return
@@ -111,10 +137,12 @@ final class CleanupManager {
         category: CleanupCategory,
         fileClient: CleanupFileClient = .live
     ) throws -> CleanupScanResult {
+        try Task.checkCancellation()
         var items: [CleanupItem] = []
         var accessErrors: [String] = []
 
         for path in category.paths {
+            try Task.checkCancellation()
             guard category.id == .trash || fileClient.fileExists(path) else {
                 continue
             }
@@ -122,10 +150,12 @@ final class CleanupManager {
             do {
                 if let values = try? path.resourceValues(forKeys: [.isDirectoryKey]),
                    values.isDirectory == false {
-                    items.append(cleanupItem(at: path))
+                    items.append(try cleanupItem(at: path))
                 } else {
                     items.append(contentsOf: try fileClient.contentsOfDirectory(path).map(cleanupItem(at:)))
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 if !isMissingPathError(error) {
                     accessErrors.append("\(path.lastPathComponent): \(error.localizedDescription)")
@@ -133,6 +163,7 @@ final class CleanupManager {
             }
         }
 
+        try Task.checkCancellation()
         items = items
             .filter { $0.size > 0 }
             .sorted { $0.size > $1.size }
@@ -213,7 +244,8 @@ final class CleanupManager {
         .fileAllocatedSizeKey
     ]
 
-    nonisolated private static func cleanupItem(at url: URL) -> CleanupItem {
+    nonisolated private static func cleanupItem(at url: URL) throws -> CleanupItem {
+        try Task.checkCancellation()
         let values = try? url.resourceValues(forKeys: itemResourceKeys)
         let isDirectory = values?.isDirectory == true
         let allocatedSize = Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
@@ -222,13 +254,14 @@ final class CleanupManager {
             url: url,
             // Only directories need a recursive walk; a plain file's own allocated
             // size is already the answer.
-            size: isDirectory ? directorySize(at: url, seededWith: allocatedSize) : allocatedSize,
+            size: isDirectory ? try directorySize(at: url, seededWith: allocatedSize) : allocatedSize,
             modifiedDate: values?.contentModificationDate,
             isDirectory: isDirectory
         )
     }
 
-    nonisolated private static func directorySize(at url: URL, seededWith allocatedSize: Int64) -> Int64 {
+    nonisolated private static func directorySize(at url: URL, seededWith allocatedSize: Int64) throws -> Int64 {
+        try Task.checkCancellation()
         // Hidden files are counted: caches and trash are full of dotfiles, and
         // skipping them under-reports reclaimable space.
         guard let enumerator = FileManager.default.enumerator(
@@ -242,6 +275,7 @@ final class CleanupManager {
         var totalBytes = allocatedSize
 
         for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
             guard let values = try? fileURL.resourceValues(forKeys: sizeResourceKeys) else {
                 continue
             }

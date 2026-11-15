@@ -76,7 +76,7 @@ nonisolated final class EventTap: @unchecked Sendable {
     /// a stall; `reenableAfterTimeout()` is the path for timeouts.
     func reenable() {
         tapThread.performAndWait { [self] in
-            guard let machPort = self.machPort else { return }
+            guard let machPort = self.machPort, !self.timeoutBreaker.isTripped else { return }
 
             CGEvent.tapEnable(tap: machPort, enable: true)
         }
@@ -108,13 +108,11 @@ nonisolated final class EventTap: @unchecked Sendable {
         callback: CGEventTapCallBack,
         target: AnyObject
     ) -> Bool {
+        guard !timeoutBreaker.isTripped else { return false }
+
         if let existingPort = machPort {
             if installedEventMask == eventMask {
-                // Reusing a live tap must not disturb it, but a tap the system or
-                // the breaker left disabled keeps its port and mask, so reuse is
-                // the moment to bring it back rather than hand back a dead tap.
                 if !CGEvent.tapIsEnabled(tap: existingPort) {
-                    timeoutBreaker.reset()
                     CGEvent.tapEnable(tap: existingPort, enable: true)
                     publishStatus()
                 }

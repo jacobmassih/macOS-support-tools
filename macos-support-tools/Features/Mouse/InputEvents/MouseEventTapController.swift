@@ -2,6 +2,16 @@ import Foundation
 import CoreGraphics
 import os
 
+protocol MouseEventTapControlling: AnyObject {
+    var settings: MouseTapSettings { get }
+    var hasRequiredMouseEventTaps: Bool { get }
+    var needsAnyMouseEventTap: Bool { get }
+    var isDisabledByRepeatedTimeouts: Bool { get }
+    func updateSettings(_ settings: MouseTapSettings)
+    func updateTaps(scrollTapNeeded: Bool, buttonTapNeeded: Bool, isAccessibilityEnabled: Bool)
+    func disableAllTaps()
+}
+
 /// Owns the mouse event taps and keeps them installed only while a feature needs
 /// them. An installed tap sits in the synchronous delivery path for every event
 /// it masks, so an idle tap is not free: it makes this process a prerequisite for
@@ -10,7 +20,7 @@ import os
 /// This is the `refcon` the tap callbacks receive, so it is reachable from
 /// `EventTapThread`. Only `settings` is shared with that thread, behind a lock;
 /// the rest is main-thread state driven by `MouseManager`.
-nonisolated final class MouseEventTapController: @unchecked Sendable {
+nonisolated final class MouseEventTapController: MouseEventTapControlling, @unchecked Sendable {
     private static let scrollEventMask = CGEventMask(1 << CGEventType.scrollWheel.rawValue)
     private static let buttonEventMask = CGEventMask(
         (1 << CGEventType.otherMouseDown.rawValue) | (1 << CGEventType.otherMouseUp.rawValue)
@@ -26,7 +36,7 @@ nonisolated final class MouseEventTapController: @unchecked Sendable {
     private var isButtonTapNeeded = false
 
     /// Read on the tap thread for every scroll and side-button event.
-    var settings: MouseTapSettings {
+    nonisolated var settings: MouseTapSettings {
         settingsLock.withLock { $0 }
     }
 

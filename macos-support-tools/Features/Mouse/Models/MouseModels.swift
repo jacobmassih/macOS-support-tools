@@ -58,7 +58,7 @@ enum HIDDeviceClassifier {
 /// Health of the mouse event taps. A tap is only installed while some enabled
 /// feature needs it, so "not installed" is a normal idle state rather than a
 /// fault; `isFault` is what the UI should colour on.
-enum MouseTapStatus: Equatable {
+nonisolated enum MouseTapStatus: Equatable, Sendable {
     case active
     case idle
     case accessibilityRequired

@@ -1,6 +1,6 @@
 import CoreGraphics
 
-enum KeyboardTapStatus: Equatable {
+nonisolated enum KeyboardTapStatus: Equatable, Sendable {
     case active
     case idle
     case accessibilityRequired
