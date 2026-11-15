@@ -25,7 +25,6 @@
 
 /* Begin PBXFileReference section */
 		9170A0012FC0000000000001 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
-		9170A0022FC0000000000001 /* LocalSigning.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = LocalSigning.example.xcconfig; sourceTree = "<group>"; };
 		919196182E876DA50023719C /* macos-support-tools.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "macos-support-tools.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		919196252E876DA50023719C /* macos-support-toolsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "macos-support-toolsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9191962F2E876DA50023719C /* macos-support-toolsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "macos-support-toolsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -96,7 +95,6 @@
 			isa = PBXGroup;
 			children = (
 				9170A0012FC0000000000001 /* Shared.xcconfig */,
-				9170A0022FC0000000000001 /* LocalSigning.example.xcconfig */,
 			);
 			path = Config;
 			sourceTree = "<group>";

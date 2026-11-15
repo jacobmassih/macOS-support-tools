@@ -5,6 +5,8 @@ struct MouseSettingsView: View {
     @Environment(MouseManager.self) private var mouseManager
 
     var body: some View {
+        @Bindable var mouseManager = mouseManager
+
         SettingsHeader(
             title: "Mouse",
             subtitle: "Tune global mouse behavior."
@@ -15,7 +17,7 @@ struct MouseSettingsView: View {
                 title: "Natural scroll",
                 subtitle: "When disabled, scroll wheel input from an external mouse is inverted.",
                 systemImage: "arrow.up.and.down",
-                isOn: binding(\.naturalScrollEnabled)
+                isOn: $mouseManager.naturalScrollEnabled
             )
 
             Divider()
@@ -24,40 +26,28 @@ struct MouseSettingsView: View {
                 title: "Mouse button actions",
                 subtitle: "Enable custom side-button handling for back, forward, and middle-click actions.",
                 systemImage: "button.horizontal",
-                isOn: binding(\.mouseButtonsEnabled)
+                isOn: $mouseManager.mouseButtonsEnabled
             )
         }
 
         SettingsCard {
+            PermissionStatusRow(
+                title: "Accessibility access",
+                isGranted: accessibilityManager.isAccessibilityEnabled
+            )
+
+            Divider()
+
             LabeledContent("Connected external mouse") {
                 Text(mouseManager.isAnyExternalMouseConnected ? "Yes" : "No")
                     .foregroundStyle(mouseManager.isAnyExternalMouseConnected ? .green : .secondary)
             }
 
-            Divider()
-
-            LabeledContent("Tap status") {
-                Text(mouseManager.tapStatus)
-                    .foregroundStyle(.secondary)
-            }
-
             if !accessibilityManager.isAccessibilityEnabled {
                 Divider()
 
-                Button {
-                    accessibilityManager.refresh(prompt: true)
-                } label: {
-                    Label("Request Accessibility Access", systemImage: "lock.open")
-                }
+                AccessibilityAccessButton()
             }
-        }
-    }
-
-    private func binding(_ keyPath: ReferenceWritableKeyPath<MouseManager, Bool>) -> Binding<Bool> {
-        Binding {
-            mouseManager[keyPath: keyPath]
-        } set: {
-            mouseManager[keyPath: keyPath] = $0
         }
     }
 }

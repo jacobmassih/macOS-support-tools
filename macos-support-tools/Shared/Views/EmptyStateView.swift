@@ -22,10 +22,6 @@ struct EmptyStateView: View {
         }
         .padding(36)
         .frame(maxWidth: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(.quaternary, lineWidth: 1)
-        }
+        .cardChrome()
     }
 }

@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 import IOKit.hid
 import SwiftUI
@@ -5,6 +7,10 @@ import Testing
 @testable import macos_support_tools
 
 struct macos_support_toolsTests {
+    @Test func appVersionInfoReadsBundleMetadata() {
+        #expect(!AppVersionInfo.version.isEmpty)
+    }
+
 
     @Test func hidDeviceClassifierRejectsKeyboardDevices() {
         let keyboardUsage = HIDDeviceDescriptor(
@@ -83,6 +89,38 @@ struct macos_support_toolsTests {
         #expect(result.items.first?.url.resolvingSymlinksInPath() == appBundleURL.resolvingSymlinksInPath())
         #expect(result.items.first?.isDirectory == true)
         #expect(result.totalBytes >= Int64(payload.count))
+    }
+
+    @Test func cleanupScanCountsNestedDirectorySizes() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let trashItemURL = rootURL.appending(path: "trash-item", directoryHint: .isDirectory)
+        let nestedDirURL = trashItemURL.appending(path: "nested", directoryHint: .isDirectory)
+        let fileInNestedURL = nestedDirURL.appending(path: "file.bin")
+        let fileData = Data(repeating: 0xCD, count: 8192)
+
+        try fileManager.createDirectory(at: nestedDirURL, withIntermediateDirectories: true)
+        try fileData.write(to: fileInNestedURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.isDirectory == true)
+        // Verify that nested directory size is included in total
+        #expect(result.totalBytes >= Int64(fileData.count))
     }
 
     @Test func cleanupScanIgnoresZeroByteCandidates() throws {
@@ -406,6 +444,61 @@ struct macos_support_toolsTests {
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
     }
 
+    @Test func cleanupScanReportsTrashReadErrors() throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+       let fileClient = CleanupFileClient(
+           contentsOfDirectory: { _ in
+               throw CocoaError(.fileReadNoPermission)
+           }
+       )
+
+       let result = try CleanupManager.scan(category: category, fileClient: fileClient)
+
+       #expect(result.itemCount == 0)
+       #expect(result.accessError?.contains("permission") == true)
+    }
+
+    @Test func cleanupScanTreatsReadableEmptyTrashAsEmpty() throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+
+       let result = try CleanupManager.scan(category: category)
+
+       #expect(result.itemCount == 0)
+       #expect(result.accessError == nil)
+    }
+
     @Test @MainActor func cleanupManagerDefaultCategoriesSelectExpectedPaths() {
         let manager = CleanupManager()
         let categoryIDs = manager.categories.map(\.id)
@@ -434,10 +527,6 @@ struct macos_support_toolsTests {
 
         let store = MouseDeviceStore(userDefaults: userDefaults)
         let device = makeMouseDevice(
-            naturalScrollEnabled: false,
-            leftButtonEnabled: false,
-            rightButtonEnabled: true,
-            middleButtonEnabled: false,
             button4Enabled: false,
             button5Enabled: true,
             button4Action: .middleClick,
@@ -451,11 +540,6 @@ struct macos_support_toolsTests {
         #expect(loadedDevice?.name == device.name)
         #expect(loadedDevice?.vendorID == device.vendorID)
         #expect(loadedDevice?.productID == device.productID)
-        #expect(loadedDevice?.naturalScrollEnabled == device.naturalScrollEnabled)
-        #expect(loadedDevice?.lastConnected == device.lastConnected)
-        #expect(loadedDevice?.leftButtonEnabled == device.leftButtonEnabled)
-        #expect(loadedDevice?.rightButtonEnabled == device.rightButtonEnabled)
-        #expect(loadedDevice?.middleButtonEnabled == device.middleButtonEnabled)
         #expect(loadedDevice?.button4Enabled == device.button4Enabled)
         #expect(loadedDevice?.button5Enabled == device.button5Enabled)
         #expect(loadedDevice?.button4Action == device.button4Action)
@@ -478,7 +562,7 @@ struct macos_support_toolsTests {
         manager.setDetectedDevices([device])
         #expect(!manager.shouldReverseScroll())
 
-        manager.toggleScrollDirection()
+        manager.naturalScrollEnabled = false
         #expect(!manager.naturalScrollEnabled)
         #expect(manager.shouldReverseScroll())
         #expect(!userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
@@ -500,19 +584,13 @@ struct macos_support_toolsTests {
         let device = makeMouseDevice()
 
         manager.addDevice(device)
-        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
-        manager.updateButtonSettings(for: device.id, buttonType: .right, enabled: false)
-        manager.updateButtonSettings(for: device.id, buttonType: .middle, enabled: false)
         manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
         manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
         manager.updateButtonAction(for: device.id, buttonType: .button5, action: .none)
-        manager.toggleMouseButtons()
+        manager.mouseButtonsEnabled = false
 
         let updatedDevice = try #require(manager.deviceSettings[device.id])
-        #expect(!updatedDevice.leftButtonEnabled)
-        #expect(!updatedDevice.rightButtonEnabled)
-        #expect(!updatedDevice.middleButtonEnabled)
         #expect(!updatedDevice.button4Enabled)
         #expect(!updatedDevice.button5Enabled)
         #expect(updatedDevice.button4Action == .middleClick)
@@ -522,9 +600,6 @@ struct macos_support_toolsTests {
 
         let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let reloadedDevice = try #require(reloadedManager.deviceSettings[device.id])
-        #expect(!reloadedDevice.leftButtonEnabled)
-        #expect(!reloadedDevice.rightButtonEnabled)
-        #expect(!reloadedDevice.middleButtonEnabled)
         #expect(!reloadedDevice.button4Enabled)
         #expect(!reloadedDevice.button5Enabled)
         #expect(reloadedDevice.button4Action == .middleClick)
@@ -742,10 +817,6 @@ struct macos_support_toolsTests {
         }
 
         let persistedDevice = makeMouseDevice(
-            naturalScrollEnabled: false,
-            leftButtonEnabled: false,
-            rightButtonEnabled: false,
-            middleButtonEnabled: false,
             button4Enabled: false,
             button5Enabled: false,
             button4Action: .middleClick,
@@ -759,14 +830,43 @@ struct macos_support_toolsTests {
 
         let detectedDevice = try #require(manager.connectedDevices.first)
         #expect(detectedDevice.id == persistedDevice.id)
-        #expect(!detectedDevice.naturalScrollEnabled)
-        #expect(!detectedDevice.leftButtonEnabled)
-        #expect(!detectedDevice.rightButtonEnabled)
-        #expect(!detectedDevice.middleButtonEnabled)
         #expect(!detectedDevice.button4Enabled)
         #expect(!detectedDevice.button5Enabled)
         #expect(detectedDevice.button4Action == .middleClick)
         #expect(detectedDevice.button5Action == .none)
+    }
+
+    @Test func mouseManagerAllowsButtonConfigurationForNewDevicesDetectedAtLaunch() throws {
+        let suiteName = "MouseManagerLaunchDetectedDeviceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+
+        // Initial detection at launch is the only path that populates
+        // connectedDevices without going through addDevice.
+        manager.setDetectedDevices([device])
+
+        #expect(manager.deviceSettings[device.id] != nil)
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonAction(for: device.id, buttonType: .button5, action: .middleClick)
+
+        let updatedDevice = try #require(manager.deviceSettings[device.id])
+        #expect(!updatedDevice.button4Enabled)
+        #expect(updatedDevice.button5Action == .middleClick)
+
+        let connectedDevice = try #require(manager.connectedDevices.first)
+        #expect(!connectedDevice.button4Enabled)
+        #expect(connectedDevice.button5Action == .middleClick)
+
+        let reloadedManager = makeMouseManager(userDefaults: userDefaults)
+        let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
+        #expect(!persistedDevice.button4Enabled)
+        #expect(persistedDevice.button5Action == .middleClick)
     }
 
     @Test func mouseManagerKeepsPersistedDeviceSettingsAfterDisconnect() throws {
@@ -781,26 +881,180 @@ struct macos_support_toolsTests {
 
         manager.addDevice(device)
         manager.addDevice(makeMouseDevice(id: "999-888-location-777"))
-        manager.updateButtonSettings(for: device.id, buttonType: .left, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
         manager.updateButtonAction(for: device.id, buttonType: .button4, action: .middleClick)
-        manager.removeDisconnectedDevices(currentDeviceIDs: [device.id])
+        manager.removeDevice(withID: "999-888-location-777")
 
         #expect(manager.connectedDevices.map(\.id) == [device.id])
 
-        manager.removeDisconnectedDevices(currentDeviceIDs: [])
+        manager.removeDevice(withID: device.id)
 
         #expect(manager.connectedDevices.isEmpty)
 
         manager.addDevice(device)
 
         let reconnectedDevice = try #require(manager.connectedDevices.first)
-        #expect(!reconnectedDevice.leftButtonEnabled)
+        #expect(!reconnectedDevice.button5Enabled)
         #expect(reconnectedDevice.button4Action == .middleClick)
 
         let reloadedManager = makeMouseManager(userDefaults: userDefaults)
         let persistedDevice = try #require(reloadedManager.deviceSettings[device.id])
-        #expect(!persistedDevice.leftButtonEnabled)
+        #expect(!persistedDevice.button5Enabled)
         #expect(persistedDevice.button4Action == .middleClick)
+    }
+
+    @Test func mouseManagerRemoveDeviceByIDDropsMatchingDeviceAndIgnoresUnknownID() throws {
+        let suiteName = "MouseManagerRemoveDeviceByIDTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let device = makeMouseDevice()
+        manager.addDevice(device)
+
+        // Removing an ID that was never added is a no-op.
+        manager.removeDevice(withID: "not-a-connected-device")
+        #expect(manager.connectedDevices.map(\.id) == [device.id])
+        #expect(manager.isAnyExternalMouseConnected)
+
+        manager.removeDevice(withID: device.id)
+        #expect(manager.connectedDevices.isEmpty)
+        #expect(!manager.isAnyExternalMouseConnected)
+    }
+
+    @Test func scrollReversalPolicyReversesDiscreteWheelDeltas() {
+        let descriptor = makeScrollEventDescriptor(vertical: 3, horizontal: -2)
+
+        let reversal = ScrollReversalPolicy.reversal(for: descriptor)
+
+        #expect(reversal?.deltas == ScrollWheelDeltas(vertical: -3, horizontal: 2))
+        #expect(reversal?.pointDeltas == nil)
+    }
+
+    @Test func scrollReversalPolicyReversesPointDeltasWhenPresent() {
+        let descriptor = makeScrollEventDescriptor(
+            vertical: 1,
+            horizontal: 0,
+            pointVertical: 10,
+            pointHorizontal: -4
+        )
+
+        let reversal = ScrollReversalPolicy.reversal(for: descriptor)
+
+        #expect(reversal?.deltas == ScrollWheelDeltas(vertical: -1, horizontal: 0))
+        #expect(reversal?.pointDeltas == ScrollWheelDeltas(vertical: -10, horizontal: 4))
+    }
+
+    @Test func scrollReversalPolicySkipsTrackpadPhases() {
+        let scrollPhase = makeScrollEventDescriptor(vertical: 3, horizontal: 0, scrollPhase: 1)
+        let momentumPhase = makeScrollEventDescriptor(vertical: 3, horizontal: 0, momentumPhase: 1)
+
+        #expect(ScrollReversalPolicy.reversal(for: scrollPhase) == nil)
+        #expect(ScrollReversalPolicy.reversal(for: momentumPhase) == nil)
+    }
+
+    @Test func scrollReversalPolicySkipsSubWheelSizedDeltas() {
+        // Whole-number, but smaller than one wheel click.
+        let tinyDelta = makeScrollEventDescriptor(vertical: 0, horizontal: 0)
+
+        #expect(ScrollReversalPolicy.reversal(for: tinyDelta) == nil)
+    }
+
+    @Test func scrollReversalPolicySkipsFractionalTrackpadDeltas() {
+        let fractional = makeScrollEventDescriptor(vertical: 3.5, horizontal: 2.25)
+
+        #expect(ScrollReversalPolicy.reversal(for: fractional) == nil)
+    }
+
+    @Test func scrollEventDescriptorReadsVerticalDeltaFromAxis1() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
+
+        let descriptor = event.scrollEventDescriptor
+
+        #expect(descriptor.deltas == ScrollWheelDeltas(vertical: 3, horizontal: -2))
+    }
+
+    @Test func reverseScrollIfNeededFlipsWheelEventInPlace() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
+
+        reverseScrollIfNeeded(event)
+
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == -3)
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis2) == 2)
+    }
+
+    @Test func reverseScrollIfNeededSkipsPointDeltasWhenEventCarriesNone() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: 0))
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
+        event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: 0)
+        #expect(event.scrollEventDescriptor.pointDeltas.isZero)
+
+        reverseScrollIfNeeded(event)
+
+        // CoreGraphics re-derives the point deltas from the line deltas, so only
+        // the line deltas are ours to assert on here.
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == -3)
+    }
+
+    @Test func reverseScrollIfNeededLeavesTrackpadEventUntouched() throws {
+        let event = try #require(makeScrollEvent(axis1: 3, axis2: 0))
+        event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 1)
+
+        reverseScrollIfNeeded(event)
+
+        #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == 3)
+    }
+
+    @Test func keyboardManagerSuppressesEveryEventWhileBlocked() throws {
+        let suiteName = "KeyboardManagerBlockedTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+        let event = try #require(makeKeyboardEvent(keyDown: false))
+
+        #expect(manager.shouldSuppressKeyboardEvent(event, type: .keyUp))
+    }
+
+    @Test func keyboardManagerAllowsEventsWhenDebounceDisabled() throws {
+        let suiteName = "KeyboardManagerDebounceOffTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let event = try #require(makeKeyboardEvent(keyDown: true))
+
+        #expect(!manager.shouldSuppressKeyboardEvent(event, type: .keyDown))
+    }
+
+    @Test func keyboardManagerDebouncesRepeatedKeyDownsButIgnoresKeyUps() throws {
+        let suiteName = "KeyboardManagerDebounceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+        manager.keyboardDebounceDelayMilliseconds = 45
+
+        let firstPress = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_000_000_000))
+        #expect(!manager.shouldSuppressKeyboardEvent(firstPress, type: .keyDown))
+
+        // A key up never consults the debounce filter, even inside the window.
+        let release = try #require(makeKeyboardEvent(keyDown: false, timestamp: 1_005_000_000))
+        #expect(!manager.shouldSuppressKeyboardEvent(release, type: .keyUp))
+
+        // A second press 10ms later is chatter and gets suppressed.
+        let bounce = try #require(makeKeyboardEvent(keyDown: true, timestamp: 1_010_000_000))
+        #expect(manager.shouldSuppressKeyboardEvent(bounce, type: .keyDown))
     }
 
     @Test func cleanupRunResultComputedPropertiesSummarizeItems() {
@@ -839,13 +1093,12 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: 60,
             itemCount: 3,
-            items: [smallItem, mediumItem, largeItem]
+            items: [smallItem, mediumItem, largeItem],
+            accessError: nil
         )
 
         #expect(scanResult.largestItem?.url == largeItem.url)
         #expect(scanResult.mostRecentModifiedDate == newerDate)
-        #expect(scanResult.oldestModifiedDate == olderDate)
-        #expect(scanResult.previewItems(limit: 2).map(\.url) == [largeItem.url, mediumItem.url])
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
@@ -862,7 +1115,8 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: item.size,
             itemCount: 1,
-            items: [item]
+            items: [item],
+            accessError: nil
         )
 
         #expect(CleanupCategoryID.logs.id == "logs")
@@ -1332,6 +1586,7 @@ struct macos_support_toolsTests {
                 .environment(KeyboardManager(accessibilityManager: accessibilityManager))
                 .environment(MouseManager(accessibilityManager: accessibilityManager))
                 .environment(thermalManager)
+                .environment(LaunchAtLogin())
         )
 
         renderForTests(
@@ -1340,9 +1595,347 @@ struct macos_support_toolsTests {
                 .environment(KeyboardManager(accessibilityManager: accessibilityManager))
                 .environment(MouseManager(accessibilityManager: accessibilityManager))
                 .environment(thermalManager)
+                .environment(LaunchAtLogin())
                 .environment(CleanupManager())
         )
     }
+    @Test func tapDisabledEventTypesAreRecognized() {
+        #expect(CGEventType.tapDisabledByTimeout.isTapDisabledEvent)
+        #expect(CGEventType.tapDisabledByUserInput.isTapDisabledEvent)
+        #expect(!CGEventType.scrollWheel.isTapDisabledEvent)
+        #expect(!CGEventType.otherMouseDown.isTapDisabledEvent)
+        #expect(!CGEventType.keyDown.isTapDisabledEvent)
+    }
+
+    @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
+        let suiteName = "MouseTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let scrollEvent = try #require(CGEvent(source: nil))
+        let buttonEvent = try #require(CGEvent(source: nil))
+
+        let scrollResult = try invokeTapCallback(
+            scrollEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: scrollEvent
+        )
+        let buttonResult = try invokeTapCallback(
+            buttonEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: buttonEvent
+        )
+
+        #expect(scrollResult === scrollEvent)
+        #expect(buttonResult === buttonEvent)
+    }
+
+    @Test func keyboardEventCallbackPassesThroughTimeoutNotificationsWhileBlocking() throws {
+        let suiteName = "KeyboardTapDisabledTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let disabledNotification = try #require(CGEvent(source: nil))
+        let notificationResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByTimeout,
+            event: disabledNotification
+        )
+        #expect(notificationResult === disabledNotification)
+
+        // A stall is not a user request: the block stays on.
+        #expect(manager.keyboardBlocked)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult == nil)
+    }
+
+    @Test func keyboardTapDisabledByUserInputReleasesKeyboardBlock() async throws {
+        let suiteName = "KeyboardUserInputDisableTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardBlocked = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+        #expect(result === notification)
+
+        // The release is hopped off the tap callback, so drain the main queue.
+        await MainActor.run {}
+
+        // The OS-level escape from Block Keyboard must actually unblock it,
+        // otherwise the toggle claims to be blocking a keyboard that works.
+        #expect(!manager.keyboardBlocked)
+
+        let keyDownEvent = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true))
+        let keyDownResult = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .keyDown,
+            event: keyDownEvent
+        )
+        #expect(keyDownResult === keyDownEvent)
+    }
+
+    @Test func keyboardTapDisabledByUserInputWithoutBlockingKeepsDebounceAlive() throws {
+        let suiteName = "KeyboardUserInputDebounceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        manager.keyboardDebounceEnabled = true
+
+        let notification = try #require(CGEvent(source: nil))
+        let result = try invokeTapCallback(
+            keyboardEventCallback,
+            refconObject: manager,
+            type: .tapDisabledByUserInput,
+            event: notification
+        )
+
+        // Debounce is not a lockout, so there is no escape to honour here.
+        #expect(result === notification)
+        #expect(!manager.keyboardBlocked)
+        #expect(manager.keyboardDebounceEnabled)
+    }
+
+    @Test func mouseButtonActionRoundTripsRemainingCases() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+
+        for action in MouseButtonAction.allCases {
+            let data = try encoder.encode(action)
+            let decoded = try decoder.decode(MouseButtonAction.self, from: data)
+            #expect(decoded == action)
+        }
+    }
+
+    // `object(forKey:)` also reports registration-domain values, so it cannot tell
+    // a registered fallback apart from a stored one. `persistentDomain(forName:)`
+    // sees only what was actually written, which is what these tests care about.
+    @Test func mouseManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "MouseManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[MouseManager.DefaultsKey.mouseButtonsEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.naturalScrollEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.citrixPassthroughEnabled] == nil)
+
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.mouseButtonsEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.citrixPassthroughEnabled))
+
+        #expect(manager.mouseButtonsEnabled)
+        #expect(manager.naturalScrollEnabled)
+        #expect(manager.citrixPassthroughEnabled)
+    }
+
+    @Test func keyboardManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "KeyboardManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceEnabled] == nil)
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds] == nil)
+
+        #expect(!userDefaults.bool(forKey: KeyboardManager.DefaultsKey.keyboardDebounceEnabled))
+        #expect(
+            userDefaults.double(forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+                == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds
+        )
+
+        #expect(!manager.keyboardDebounceEnabled)
+        #expect(manager.keyboardDebounceDelayMilliseconds == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds)
+    }
+
+    @Test func keyboardManagerClampsPersistedDebounceWindowOnLoad() throws {
+        let suiteName = "KeyboardManagerPersistedClampTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        userDefaults.set(500, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 100)
+
+        userDefaults.set(1, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 5)
+    }
+
+    @Test func launchAtLoginRefreshReflectsRegistrationState() {
+        let registration = LaunchAtLoginRegistrationStub()
+        let launchAtLogin = LaunchAtLogin(
+            notificationCenter: NotificationCenter(),
+            isRegistered: { registration.isRegistered }
+        )
+
+        #expect(!launchAtLogin.isEnabled)
+
+        registration.isRegistered = true
+        launchAtLogin.refresh()
+        #expect(launchAtLogin.isEnabled)
+
+        registration.isRegistered = false
+        launchAtLogin.refresh()
+        #expect(!launchAtLogin.isEnabled)
+    }
+
+    @MainActor
+    @Test func launchAtLoginRefreshesWhenAppBecomesActive() async {
+        let center = NotificationCenter()
+        let registration = LaunchAtLoginRegistrationStub()
+        let launchAtLogin = LaunchAtLogin(
+            notificationCenter: center,
+            isRegistered: { registration.isRegistered }
+        )
+
+        #expect(!launchAtLogin.isEnabled)
+
+        registration.isRegistered = true
+        center.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        for _ in 0..<200 where !launchAtLogin.isEnabled {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+
+        #expect(launchAtLogin.isEnabled)
+    }
+
+    @Test func cleanupScanCountsHiddenFilesTowardDirectoryTotals() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let cacheDirectoryURL = rootURL.appending(path: "HiddenFixture", directoryHint: .isDirectory)
+        let hiddenDirectoryURL = cacheDirectoryURL.appending(path: ".hidden-subdir", directoryHint: .isDirectory)
+        let hiddenFileURL = cacheDirectoryURL.appending(path: ".hidden-cache.bin")
+        let hiddenNestedFileURL = hiddenDirectoryURL.appending(path: "nested.bin")
+        let hiddenPayload = Data(repeating: 0xCD, count: 64 * 1024)
+        let nestedPayload = Data(repeating: 0xCE, count: 32 * 1024)
+
+        try fileManager.createDirectory(at: hiddenDirectoryURL, withIntermediateDirectories: true)
+        try hiddenPayload.write(to: hiddenFileURL)
+        try nestedPayload.write(to: hiddenNestedFileURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .userCaches,
+            title: "Test Caches",
+            subtitle: "Fixture category",
+            systemImage: "internaldrive",
+            paths: [rootURL],
+            riskLevel: .safe
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.url.resolvingSymlinksInPath() == cacheDirectoryURL.resolvingSymlinksInPath())
+        #expect(result.items.first?.isDirectory == true)
+        #expect(result.items.first?.modifiedDate != nil)
+        // Hidden entries are the directory's only content, so the total is proof
+        // both the dotfile and the dot-directory's contents were walked.
+        #expect(result.totalBytes >= Int64(hiddenPayload.count + nestedPayload.count))
+    }
+
+    @Test @MainActor func cleanupManagerConcurrentScanKeepsDeclaredCategoryOrder() async throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        // Deliberately not `CleanupCategoryID.allCases` order, so the assertion
+        // below can only pass if results follow the declared category order.
+        let orderedIDs: [CleanupCategoryID] = [.xcodeDerivedData, .trash, .logs, .userCaches, .temporaryFiles]
+        var categories: [CleanupCategory] = []
+
+        for (offset, id) in orderedIDs.enumerated() {
+            let categoryRootURL = rootURL.appending(path: id.rawValue, directoryHint: .isDirectory)
+            let candidateURL = categoryRootURL.appending(path: "candidate", directoryHint: .isDirectory)
+            // The first category gets a far deeper tree, so under concurrent
+            // scanning it is very unlikely to be the first one to finish.
+            let nestedCount = offset == 0 ? 120 : 1
+
+            for index in 0..<nestedCount {
+                let nestedURL = candidateURL.appending(path: "nested-\(index)", directoryHint: .isDirectory)
+                try fileManager.createDirectory(at: nestedURL, withIntermediateDirectories: true)
+                try Data(repeating: 0xEF, count: 4 * 1024)
+                    .write(to: nestedURL.appending(path: "payload-\(index).bin"))
+            }
+
+            categories.append(
+                CleanupCategory(
+                    id: id,
+                    title: id.rawValue,
+                    subtitle: "Fixture category",
+                    systemImage: "trash",
+                    paths: [categoryRootURL],
+                    riskLevel: .safe
+                )
+            )
+        }
+
+        let manager = CleanupManager(categories: categories)
+
+        await manager.scan()
+
+        #expect(manager.lastError == nil)
+        #expect(!manager.isScanning)
+        #expect(manager.lastScanDate != nil)
+        #expect(manager.scanResults.map(\.category.id) == orderedIDs)
+        #expect(manager.scanResults.allSatisfy { $0.itemCount == 1 })
+        #expect(manager.totalReclaimableBytes > 0)
+
+        let deepestTotalBytes = try #require(manager.scanResults.first?.totalBytes)
+        let shallowTotalBytes = try #require(manager.scanResults.last?.totalBytes)
+        #expect(deepestTotalBytes > shallowTotalBytes)
+    }
+}
+
+private final class LaunchAtLoginRegistrationStub {
+    var isRegistered = false
 }
 
 private actor RefreshCounter {
@@ -1483,10 +2076,6 @@ private func makeMouseDevice(
     name: String = "Test Mouse",
     vendorID: Int = 123,
     productID: Int = 456,
-    naturalScrollEnabled: Bool = true,
-    leftButtonEnabled: Bool = true,
-    rightButtonEnabled: Bool = true,
-    middleButtonEnabled: Bool = true,
     button4Enabled: Bool = true,
     button5Enabled: Bool = true,
     button4Action: MouseButtonAction = .forward,
@@ -1497,16 +2086,60 @@ private func makeMouseDevice(
         name: name,
         vendorID: vendorID,
         productID: productID,
-        naturalScrollEnabled: naturalScrollEnabled,
-        lastConnected: Date(timeIntervalSince1970: 1_234),
-        leftButtonEnabled: leftButtonEnabled,
-        rightButtonEnabled: rightButtonEnabled,
-        middleButtonEnabled: middleButtonEnabled,
         button4Enabled: button4Enabled,
         button5Enabled: button5Enabled,
         button4Action: button4Action,
         button5Action: button5Action
     )
+}
+
+private func makeScrollEventDescriptor(
+    vertical: Double,
+    horizontal: Double,
+    pointVertical: Double = 0,
+    pointHorizontal: Double = 0,
+    scrollPhase: Int64 = 0,
+    momentumPhase: Int64 = 0
+) -> ScrollEventDescriptor {
+    ScrollEventDescriptor(
+        deltas: ScrollWheelDeltas(vertical: vertical, horizontal: horizontal),
+        pointDeltas: ScrollWheelDeltas(vertical: pointVertical, horizontal: pointHorizontal),
+        scrollPhase: scrollPhase,
+        momentumPhase: momentumPhase
+    )
+}
+
+private func makeScrollEvent(axis1: Double, axis2: Double) -> CGEvent? {
+    guard let event = CGEvent(
+        scrollWheelEvent2Source: nil,
+        units: .line,
+        wheelCount: 2,
+        wheel1: 0,
+        wheel2: 0,
+        wheel3: 0
+    ) else {
+        return nil
+    }
+
+    event.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: axis1)
+    event.setDoubleValueField(.scrollWheelEventDeltaAxis2, value: axis2)
+    return event
+}
+
+private func makeKeyboardEvent(
+    keyDown: Bool,
+    keyCode: CGKeyCode = 0,
+    timestamp: CGEventTimestamp? = nil
+) -> CGEvent? {
+    guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: keyDown) else {
+        return nil
+    }
+
+    if let timestamp {
+        event.timestamp = timestamp
+    }
+
+    return event
 }
 
 private func makeMouseManager(userDefaults: UserDefaults) -> MouseManager {
@@ -1528,6 +2161,21 @@ private func makeIsolatedUserDefaults() -> UserDefaults {
     let userDefaults = UserDefaults(suiteName: suiteName)!
     userDefaults.removePersistentDomain(forName: suiteName)
     return userDefaults
+}
+
+private func invokeTapCallback(
+    _ callback: (CGEventTapProxy, CGEventType, CGEvent, UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>?,
+    refconObject: AnyObject,
+    type: CGEventType,
+    event: CGEvent
+) throws -> CGEvent? {
+    // #require rather than a nil-returning guard: the callbacks under test return
+    // nil to mean "event suppressed", so a helper that also returns nil on setup
+    // failure would let those assertions pass for the wrong reason.
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
+
+    let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
+    return callback(proxy, type, event, refcon)?.takeRetainedValue()
 }
 
 private final class TrashRecorder: @unchecked Sendable {

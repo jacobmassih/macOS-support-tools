@@ -7,6 +7,7 @@ struct macos_support_toolsApp: App {
     @State private var mouseManager: MouseManager
     @State private var thermalManager: ThermalManager
     @State private var cleanupManager = CleanupManager()
+    @State private var launchAtLogin = LaunchAtLogin()
 
     init() {
         let accessibilityManager = AccessibilityManager()
@@ -29,6 +30,7 @@ struct macos_support_toolsApp: App {
                 .environment(accessibilityManager)
                 .environment(keyboardManager)
                 .environment(mouseManager)
+                .environment(launchAtLogin)
                 .environment(thermalManager)
         } label: {
             // The icon is the app's identity and stays put. Enabling the temperature
@@ -42,11 +44,13 @@ struct macos_support_toolsApp: App {
         }
         Window("Settings", id: "main") {
             SettingsRootView()
+                .background(SettingsWindowDockView())
                 .environment(accessibilityManager)
                 .environment(keyboardManager)
                 .environment(mouseManager)
                 .environment(thermalManager)
                 .environment(cleanupManager)
+                .environment(launchAtLogin)
         }
         .windowResizability(.contentSize)
     }

@@ -10,7 +10,8 @@ It is built for a simple use case: make external mouse scrolling and side-button
 - Remaps side mouse buttons to back, forward, or middle click behavior
 - Temporarily skips custom side-button handling when Citrix Workspace is the frontmost app
 - Supports launch at login
-- Runs as a menu bar utility instead of a full Dock app
+- Shows a Dock icon while the Settings window is open (including when minimized)
+- Returns to menu-bar-only mode when Settings is closed; input features keep running
 
 ## How It Works
 
@@ -60,33 +61,9 @@ Full builds require the full Xcode app. Command Line Tools alone are not enough 
 
 ## Notes
 
-- The project is intentionally checked in without personal signing metadata.
+- The project uses the checked-in development team in `Config/Shared.xcconfig` for local Xcode builds.
 - CI is configured to build without code signing.
 - The app is not sandboxed because its input-event behavior depends on macOS APIs that require broader access.
-
-## Local Signing For Xcode
-
-If you want to run the app locally from Xcode with a stable signing identity, create `Config/LocalSigning.xcconfig` on your machine.
-
-The easiest option is:
-
-```bash
-./scripts/setup-local-signing.sh YOUR_TEAM_ID
-```
-
-You can find your Apple Developer Team ID in Xcode under:
-
-- `Xcode > Settings > Accounts`
-- select your Apple ID
-- select your team
-
-If you prefer to do it manually, create `Config/LocalSigning.xcconfig` with:
-
-```xcconfig
-DEVELOPMENT_TEAM = YOUR_TEAM_ID
-```
-
-This file is ignored by git and is included automatically by the shared project configuration.
 
 ## Releases
 
