@@ -43,19 +43,24 @@ struct CleanupSettingsView: View {
                     .buttonStyle(.bordered)
                     .disabled(!cleanupManager.canClearAllCaches || cleanupManager.isScanning || cleanupManager.isCleaning)
 
-                    Button {
-                        Task {
-                            await cleanupManager.scan()
+                    if cleanupManager.isScanning {
+                        Button(role: .cancel) {
+                            cleanupManager.cancelScan()
+                        } label: {
+                            Label("Cancel Scan", systemImage: "xmark.circle")
                         }
-                    } label: {
-                        if cleanupManager.isScanning {
-                            Label("Scanning...", systemImage: "hourglass")
-                        } else {
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button {
+                            Task {
+                                await cleanupManager.scan()
+                            }
+                        } label: {
                             Label("Scan Mac", systemImage: "sparkle.magnifyingglass")
                         }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(cleanupManager.isCleaning)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
                 }
             }
 
