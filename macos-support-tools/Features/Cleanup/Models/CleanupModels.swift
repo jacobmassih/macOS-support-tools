@@ -74,8 +74,6 @@ struct CleanupScanResult: Identifiable, Codable {
         mostRecentModifiedDate = items.lazy.compactMap(\.modifiedDate).max()
     }
 
-    // Derived values stay out of the serialized format and are rebuilt when
-    // decoding, so older payloads and newly scanned results behave alike.
     private enum CodingKeys: String, CodingKey {
         case category, totalBytes, itemCount, items, accessError
     }
