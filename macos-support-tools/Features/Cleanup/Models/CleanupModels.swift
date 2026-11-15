@@ -46,7 +46,7 @@ struct CleanupItem: Identifiable, Codable {
     }
 }
 
-struct CleanupScanResult: Identifiable, Codable {
+struct CleanupScanResult: Identifiable {
     var id: CleanupCategoryID { category.id }
 
     let category: CleanupCategory
@@ -72,21 +72,6 @@ struct CleanupScanResult: Identifiable, Codable {
         self.accessError = accessError
         largestItem = items.max { $0.size < $1.size }
         mostRecentModifiedDate = items.lazy.compactMap(\.modifiedDate).max()
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case category, totalBytes, itemCount, items, accessError
-    }
-
-    nonisolated init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            category: try values.decode(CleanupCategory.self, forKey: .category),
-            totalBytes: try values.decode(Int64.self, forKey: .totalBytes),
-            itemCount: try values.decode(Int.self, forKey: .itemCount),
-            items: try values.decode([CleanupItem].self, forKey: .items),
-            accessError: try values.decodeIfPresent(String.self, forKey: .accessError)
-        )
     }
 }
 

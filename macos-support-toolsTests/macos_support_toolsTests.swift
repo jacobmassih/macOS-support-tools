@@ -1102,23 +1102,14 @@ struct macos_support_toolsTests {
         #expect(scanResult.mostRecentModifiedDate == newerDate)
     }
 
-    @Test @MainActor func cleanupScanSummarySurvivesLegacyCodableRoundTrip() throws {
+    @Test @MainActor func cleanupScanSummaryHandlesEmptyAndUndatedItems() {
         let category = CleanupCatalog.defaultCategories()[0]
-        let dated = CleanupItem(url: URL(filePath: "/tmp/dated"), size: 20, modifiedDate: Date(timeIntervalSince1970: 100))
         let undated = CleanupItem(url: URL(filePath: "/tmp/undated"), size: 10, modifiedDate: nil)
-        for items in [[dated, undated], [undated], []] {
-            let result = CleanupScanResult(category: category, totalBytes: items.reduce(0) { $0 + $1.size }, itemCount: items.count, items: items, accessError: "Partial scan")
-            let data = try JSONEncoder().encode(result)
-            let fields = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            #expect(Set(fields.keys) == ["category", "totalBytes", "itemCount", "items", "accessError"])
-            let decoded = try JSONDecoder().decode(CleanupScanResult.self, from: data)
-            #expect(decoded.largestItem?.url == items.first?.url)
-            #expect(decoded.mostRecentModifiedDate == items.first?.modifiedDate)
-            #expect(decoded.accessError == "Partial scan")
+        for items in [[undated], []] {
+            let result = CleanupScanResult(category: category, totalBytes: items.reduce(0) { $0 + $1.size }, itemCount: items.count, items: items, accessError: nil)
+            #expect(result.largestItem?.url == items.first?.url)
+            #expect(result.mostRecentModifiedDate == nil)
         }
-        let result = CleanupScanResult(category: category, totalBytes: 0, itemCount: 0, items: [], accessError: nil)
-        let decoded = try JSONDecoder().decode(CleanupScanResult.self, from: JSONEncoder().encode(result))
-        #expect(decoded.accessError == nil)
     }
 
     @Test @MainActor func cleanupByteFormattingMatchesConfiguredFormatterAcrossRepeatedCalls() {
