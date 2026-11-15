@@ -46,7 +46,7 @@ struct CleanupItem: Identifiable, Codable {
     }
 }
 
-struct CleanupScanResult: Identifiable, Codable {
+struct CleanupScanResult: Identifiable {
     var id: CleanupCategoryID { category.id }
 
     let category: CleanupCategory
@@ -55,12 +55,23 @@ struct CleanupScanResult: Identifiable, Codable {
     let items: [CleanupItem]
     let accessError: String?
 
-    var largestItem: CleanupItem? {
-        items.max { $0.size < $1.size }
-    }
+    let largestItem: CleanupItem?
+    let mostRecentModifiedDate: Date?
 
-    var mostRecentModifiedDate: Date? {
-        items.compactMap(\.modifiedDate).max()
+    nonisolated init(
+        category: CleanupCategory,
+        totalBytes: Int64,
+        itemCount: Int,
+        items: [CleanupItem],
+        accessError: String?
+    ) {
+        self.category = category
+        self.totalBytes = totalBytes
+        self.itemCount = itemCount
+        self.items = items
+        self.accessError = accessError
+        largestItem = items.max { $0.size < $1.size }
+        mostRecentModifiedDate = items.lazy.compactMap(\.modifiedDate).max()
     }
 }
 

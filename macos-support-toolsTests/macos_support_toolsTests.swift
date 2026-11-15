@@ -369,6 +369,8 @@ struct macos_support_toolsTests {
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.map { $0.item.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
         #expect(manager.scanResults.first?.items.map { $0.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
+        #expect(manager.scanResults.first?.largestItem?.url.resolvingSymlinksInPath() == secondURL.resolvingSymlinksInPath())
+        #expect(manager.scanResults.first?.mostRecentModifiedDate == manager.scanResults.first?.items.first?.modifiedDate)
         #expect(manager.totalReclaimableBytes == manager.scanResults.first?.totalBytes)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
     }
@@ -1098,6 +1100,27 @@ struct macos_support_toolsTests {
 
         #expect(scanResult.largestItem?.url == largeItem.url)
         #expect(scanResult.mostRecentModifiedDate == newerDate)
+    }
+
+    @Test @MainActor func cleanupScanSummaryHandlesEmptyAndUndatedItems() {
+        let category = CleanupCatalog.defaultCategories()[0]
+        let undated = CleanupItem(url: URL(filePath: "/tmp/undated"), size: 10, modifiedDate: nil)
+        for items in [[undated], []] {
+            let result = CleanupScanResult(category: category, totalBytes: items.reduce(0) { $0 + $1.size }, itemCount: items.count, items: items, accessError: nil)
+            #expect(result.largestItem?.url == items.first?.url)
+            #expect(result.mostRecentModifiedDate == nil)
+        }
+    }
+
+    @Test @MainActor func cleanupByteFormattingMatchesConfiguredFormatterAcrossRepeatedCalls() {
+        let reference = ByteCountFormatter()
+        reference.allowedUnits = [.useBytes, .useKB, .useMB, .useGB, .useTB]
+        reference.countStyle = .file
+        reference.includesUnit = true
+        reference.isAdaptive = true
+        for bytes: Int64 in [0, 1, 1024, 5_000_000, 1_000_000_000_000, 1024, 0] {
+            #expect(ByteCountFormatter.cleanupString(fromByteCount: bytes) == reference.string(fromByteCount: bytes))
+        }
     }
 
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
