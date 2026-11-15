@@ -31,6 +31,7 @@ struct macos_support_toolsApp: App {
         }
         Window("Settings", id: "main") {
             SettingsRootView()
+                .background(SettingsWindowDockView())
                 .environment(accessibilityManager)
                 .environment(keyboardManager)
                 .environment(mouseManager)

@@ -66,11 +66,12 @@ struct CleanupScanResult: Identifiable, Codable {
     let totalBytes: Int64
     let itemCount: Int
     let items: [CleanupItem]
+    let accessError: String?
     var accessState: CleanupAccessState = .accessible
 
     /// `true` only when the category was readable and genuinely held nothing.
     var isEmpty: Bool {
-        accessState == .accessible && items.isEmpty
+        accessError == nil && accessState == .accessible && items.isEmpty
     }
 
     var largestItem: CleanupItem? {

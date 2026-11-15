@@ -73,12 +73,27 @@ struct CleanupResultCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if result.accessState.requiresFullDiskAccess {
-                CleanupPermissionNotice(category: result.category)
-            } else if result.items.isEmpty {
-                Label("No candidate files found.", systemImage: "checkmark.circle")
+            if let accessError = result.accessError {
+                Divider()
+
+                Label("Unable to read all category contents", systemImage: "lock.fill")
+                    .foregroundStyle(.orange)
+
+                Text(accessError)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if result.accessState.requiresFullDiskAccess {
+                    CleanupPermissionNotice(category: result.category)
+                }
+            }
+
+            if result.items.isEmpty {
+                if result.accessError == nil {
+                    Label("No candidate files found.", systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 CleanupPreviewDetails(result: result)
             }
@@ -154,7 +169,7 @@ private struct CleanupPreviewDetails: View {
                     .foregroundStyle(.secondary)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(result.items.prefix(candidatePreviewLimit)) { item in
                             CleanupCandidateRow(item: item)
                         }

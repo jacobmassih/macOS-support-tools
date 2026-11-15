@@ -55,8 +55,9 @@ final class CleanupManager {
                 of: (offset: Int, result: CleanupScanResult).self
             ) { group in
                 for (offset, category) in categoriesToScan.enumerated() {
+                    let fileClient = fileClient
                     group.addTask(priority: .userInitiated) {
-                        (offset, try Self.scan(category: category))
+                        (offset, try Self.scan(category: category, fileClient: fileClient))
                     }
                 }
 
@@ -114,20 +115,33 @@ final class CleanupManager {
         await clean(items: cacheResult.items)
     }
 
-    nonisolated static func scan(category: CleanupCategory) throws -> CleanupScanResult {
+    nonisolated static func scan(
+        category: CleanupCategory,
+        fileClient: CleanupFileClient = .live
+    ) throws -> CleanupScanResult {
         var items: [CleanupItem] = []
+        var accessErrors: [String] = []
         var accessState = CleanupAccessState.accessible
 
         for path in category.paths {
-            guard FileManager.default.fileExists(atPath: path.path) else {
+            guard category.id == .trash || fileClient.fileExists(path) else {
                 continue
             }
 
-            switch cleanupItems(in: path) {
-            case .items(let pathItems):
-                items.append(contentsOf: pathItems)
-            case .permissionDenied:
-                accessState = .permissionDenied
+            do {
+                if let values = try? path.resourceValues(forKeys: [.isDirectoryKey]),
+                   values.isDirectory == false {
+                    items.append(cleanupItem(at: path))
+                } else {
+                    items.append(contentsOf: try fileClient.contentsOfDirectory(path).map(cleanupItem(at:)))
+                }
+            } catch {
+                if isPermissionError(error) {
+                    accessState = .permissionDenied
+                }
+                if !isMissingPathError(error) {
+                    accessErrors.append("\(path.lastPathComponent): \(error.localizedDescription)")
+                }
             }
         }
 
@@ -140,8 +154,14 @@ final class CleanupManager {
             totalBytes: items.reduce(0) { $0 + $1.size },
             itemCount: items.count,
             items: items,
+            accessError: accessErrors.isEmpty ? nil : accessErrors.joined(separator: "\n"),
             accessState: accessState
         )
+    }
+
+    nonisolated private static func isMissingPathError(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == NSCocoaErrorDomain && error.code == CocoaError.fileReadNoSuchFile.rawValue
     }
 
     nonisolated static func clean(
@@ -185,18 +205,10 @@ final class CleanupManager {
                 totalBytes: remainingItems.reduce(0) { $0 + $1.size },
                 itemCount: remainingItems.count,
                 items: remainingItems,
+                accessError: result.accessError,
                 accessState: result.accessState
             )
         }
-    }
-
-    /// The outcome of reading a single scanned path.
-    ///
-    /// `permissionDenied` is kept distinct from an empty item list so the caller
-    /// can report "unreadable" rather than silently reporting zero bytes.
-    private enum PathScan {
-        case items([CleanupItem])
-        case permissionDenied
     }
 
     /// Everything a `CleanupItem` needs, prefetched by the directory read so the
@@ -215,40 +227,8 @@ final class CleanupManager {
         .fileAllocatedSizeKey
     ]
 
-    nonisolated private static func cleanupItems(in url: URL) -> PathScan {
-        // A category path may point at a single file, which is a candidate in
-        // its own right rather than a directory to enumerate.
-        let values = try? url.resourceValues(forKeys: itemResourceKeys)
-
-        guard values?.isDirectory == true else {
-            return .items([cleanupItem(at: url, values: values)])
-        }
-
-        do {
-            let childURLs = try FileManager.default.contentsOfDirectory(
-                at: url,
-                includingPropertiesForKeys: Array(itemResourceKeys),
-                options: []
-            )
-
-            return .items(childURLs.map(cleanupItem(at:)))
-        } catch {
-            // TCC-protected locations such as ~/.Trash fail here unless the app
-            // has Full Disk Access. Anything else falls back to treating the
-            // directory itself as a single candidate.
-            guard isPermissionError(error) else {
-                return .items([cleanupItem(at: url, values: values)])
-            }
-
-            return .permissionDenied
-        }
-    }
-
     nonisolated private static func cleanupItem(at url: URL) -> CleanupItem {
-        cleanupItem(at: url, values: try? url.resourceValues(forKeys: itemResourceKeys))
-    }
-
-    nonisolated private static func cleanupItem(at url: URL, values: URLResourceValues?) -> CleanupItem {
+        let values = try? url.resourceValues(forKeys: itemResourceKeys)
         let isDirectory = values?.isDirectory == true
         let allocatedSize = Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
 
@@ -267,6 +247,10 @@ final class CleanupManager {
 
         if error.domain == NSCocoaErrorDomain, error.code == NSFileReadNoPermissionError {
             return true
+        }
+
+        if error.domain == NSPOSIXErrorDomain {
+            return error.code == Int(EPERM) || error.code == Int(EACCES)
         }
 
         guard let underlyingError = error.userInfo[NSUnderlyingErrorKey] as? NSError,
@@ -296,6 +280,8 @@ final class CleanupManager {
             }
 
             if values.isRegularFile == true {
+                totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+            } else if values.isDirectory == true {
                 totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
             }
         }
