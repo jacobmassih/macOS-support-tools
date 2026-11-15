@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppSettingsView: View {
-    let launchAtLogin: LaunchAtLogin
+    @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
 
     var body: some View {
         SettingsHeader(

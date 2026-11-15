@@ -53,6 +53,7 @@ struct CleanupScanResult: Identifiable, Codable {
     let totalBytes: Int64
     let itemCount: Int
     let items: [CleanupItem]
+    let accessError: String?
 
     var largestItem: CleanupItem? {
         items.max { $0.size < $1.size }
@@ -60,14 +61,6 @@ struct CleanupScanResult: Identifiable, Codable {
 
     var mostRecentModifiedDate: Date? {
         items.compactMap(\.modifiedDate).max()
-    }
-
-    var oldestModifiedDate: Date? {
-        items.compactMap(\.modifiedDate).min()
-    }
-
-    func previewItems(limit: Int = 5) -> [CleanupItem] {
-        Array(items.sorted { $0.size > $1.size }.prefix(limit))
     }
 }
 

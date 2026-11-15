@@ -13,23 +13,22 @@ import Observation
 
     var connectedDevices: [MouseDevice] = []
     var deviceSettings: [String: MouseDevice] = [:]
-    var isAnyExternalMouseConnected = false
+    var isAnyExternalMouseConnected: Bool { !connectedDevices.isEmpty }
     var isAccessibilityEnabled: Bool {
         accessibilityManager.isAccessibilityEnabled
     }
-    var aggressiveInversion = false
     var tapStatus = "Inactive"
-    var mouseButtonsEnabled = true {
+    var mouseButtonsEnabled: Bool {
         didSet {
             userDefaults.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
         }
     }
-    var naturalScrollEnabled = true {
+    var naturalScrollEnabled: Bool {
         didSet {
             userDefaults.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
         }
     }
-    var citrixPassthroughEnabled = true {
+    var citrixPassthroughEnabled: Bool {
         didSet {
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
         }
@@ -53,11 +52,6 @@ import Observation
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityManager = accessibilityManager
-        self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
-        self.eventTapController = MouseEventTapController(manager: self)
-        self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
-            self?.handleAccessibilityPermissionDidChange()
-        }
 
         userDefaults.register(defaults: [
             DefaultsKey.mouseButtonsEnabled: true,
@@ -65,12 +59,21 @@ import Observation
             DefaultsKey.citrixPassthroughEnabled: true
         ])
 
-        print("[MouseManager] Initialized and starting up.")
-        loadDeviceSettings()
+        // These are initialised, not assigned, so the `didSet` observers stay
+        // silent: assigning would write the registered fallbacks back into the
+        // persistent domain and turn a code-owned default into a stored value
+        // the user never chose.
+        self.naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
+        self.mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
+        self.citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
 
-        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
-        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
-        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
+        self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
+        self.eventTapController = MouseEventTapController(manager: self)
+        self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
+            self?.handleAccessibilityPermissionDidChange()
+        }
+
+        loadDeviceSettings()
         updateTapStatus()
     }
 
@@ -80,16 +83,7 @@ import Observation
         }
         eventTapController.disableScrollEventTap()
         eventTapController.disableButtonEventTap()
-        deviceMonitor.stopPolling()
         deviceMonitor.stop()
-    }
-
-    func toggleScrollDirection() {
-        naturalScrollEnabled.toggle()
-    }
-
-    func toggleMouseButtons() {
-        mouseButtonsEnabled.toggle()
     }
 
     func startSystemServices() {
@@ -100,7 +94,6 @@ import Observation
         eventTapController.setupScrollEventTap()
         eventTapController.setupButtonEventTap()
         updateTapStatus()
-        deviceMonitor.startPolling()
     }
 
     private func handleAccessibilityPermissionDidChange() {
@@ -116,12 +109,6 @@ import Observation
         guard var device = deviceSettings[deviceId] else { return }
 
         switch buttonType {
-        case .left:
-            device.leftButtonEnabled = enabled
-        case .right:
-            device.rightButtonEnabled = enabled
-        case .middle:
-            device.middleButtonEnabled = enabled
         case .button4:
             device.button4Enabled = enabled
         case .button5:
@@ -141,8 +128,6 @@ import Observation
             device.button4Action = action
         case .button5:
             device.button5Action = action
-        default:
-            break
         }
 
         deviceSettings[deviceId] = device
@@ -160,11 +145,6 @@ import Observation
             name: ioDevice.productString ?? "Unknown Device",
             vendorID: ioDevice.vendorID,
             productID: ioDevice.productID,
-            naturalScrollEnabled: true,
-            lastConnected: Date(),
-            leftButtonEnabled: true,
-            rightButtonEnabled: true,
-            middleButtonEnabled: true,
             button4Enabled: true,
             button5Enabled: true,
             button4Action: .forward,
@@ -180,31 +160,32 @@ import Observation
         let restoredDevice = restoredDeviceSettings(for: device)
         connectedDevices.append(restoredDevice)
         deviceSettings[device.id] = restoredDevice
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
         saveDeviceSettings()
     }
 
-    internal func removeDevice(_ device: MouseDevice) {
-        connectedDevices.removeAll { $0.id == device.id }
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
+    internal func removeDevice(withID id: String) {
+        connectedDevices.removeAll { $0.id == id }
     }
 
     internal func setDetectedDevices(_ devices: [MouseDevice]) {
-        connectedDevices = uniqueDevices(devices).map(restoredDeviceSettings(for:))
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
+        connectedDevices.removeAll()
+        devices.forEach(addDevice)
     }
-
-    internal func removeDisconnectedDevices(currentDeviceIDs: Set<String>) {
-        connectedDevices.removeAll { !currentDeviceIDs.contains($0.id) }
-        isAnyExternalMouseConnected = !connectedDevices.isEmpty
-    }
-
+    
     internal func getCurrentActiveDevice() -> MouseDevice? {
         connectedDevices.first
     }
 
     internal func shouldReverseScroll() -> Bool {
         isAnyExternalMouseConnected && !naturalScrollEnabled
+    }
+
+    internal func reenableScrollEventTap() {
+        eventTapController.reenableScrollEventTap()
+    }
+
+    internal func reenableButtonEventTap() {
+        eventTapController.reenableButtonEventTap()
     }
 
     internal func updateTapStatus() {
@@ -222,14 +203,6 @@ import Observation
         connectedDevices[index] = device
     }
 
-    private func uniqueDevices(_ devices: [MouseDevice]) -> [MouseDevice] {
-        var seenIDs = Set<String>()
-
-        return devices.filter { device in
-            seenIDs.insert(device.id).inserted
-        }
-    }
-
     private func restoredDeviceSettings(for device: MouseDevice) -> MouseDevice {
         deviceSettings[device.id] ?? device
     }
@@ -240,12 +213,6 @@ import Observation
         }
 
         deviceSettings = savedSettings
-
-        for (index, device) in connectedDevices.enumerated() {
-            if let savedDevice = deviceSettings[device.id] {
-                connectedDevices[index] = savedDevice
-            }
-        }
     }
 
     private func saveDeviceSettings() {

@@ -10,18 +10,20 @@ import Observation
 
     enum Defaults {
         static let keyboardDebounceDelayMilliseconds = 45.0
+        static let keyboardDebounceDelayMillisecondsRange = 5.0...100.0
     }
 
-    var keyboardDebounceEnabled = false {
+    var keyboardDebounceEnabled: Bool {
         didSet {
             userDefaults.set(keyboardDebounceEnabled, forKey: DefaultsKey.keyboardDebounceEnabled)
             updateKeyboardEventTap()
             resetKeyboardDebounceFilter()
         }
     }
-    var keyboardDebounceDelayMilliseconds = Defaults.keyboardDebounceDelayMilliseconds {
+    var keyboardDebounceDelayMilliseconds: Double {
         didSet {
-            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds.clamped(to: 5...100)
+            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds
+                .clamped(to: Defaults.keyboardDebounceDelayMillisecondsRange)
             guard keyboardDebounceDelayMilliseconds == clampedDelayMilliseconds else {
                 keyboardDebounceDelayMilliseconds = clampedDelayMilliseconds
                 return
@@ -45,9 +47,7 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var keyboardDebounceFilter = KeyboardDebounceFilter()
-    @ObservationIgnored private var keyboardEventTap: CFMachPort?
-    @ObservationIgnored private var keyboardRunLoopSource: CFRunLoopSource?
-    @ObservationIgnored private var keyboardEventMask: CGEventMask?
+    @ObservationIgnored private let keyboardTap = EventTap(label: "keyboard")
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -55,26 +55,32 @@ import Observation
     ) {
         self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
-        accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
-            self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
-        }
 
         userDefaults.register(defaults: [
             DefaultsKey.keyboardDebounceEnabled: false,
             DefaultsKey.keyboardDebounceDelayMilliseconds: Defaults.keyboardDebounceDelayMilliseconds
         ])
 
-        keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
-        keyboardDebounceDelayMilliseconds = userDefaults.double(
-            forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
-        )
+        // These are initialised, not assigned, so the `didSet` observers stay
+        // silent: assigning would write the registered fallbacks back into the
+        // persistent domain and turn a code-owned default into a stored value
+        // the user never chose. Initialisation also skips the observer's clamp,
+        // so a persisted out-of-range delay is clamped explicitly here.
+        self.keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
+        self.keyboardDebounceDelayMilliseconds = userDefaults
+            .double(forKey: DefaultsKey.keyboardDebounceDelayMilliseconds)
+            .clamped(to: Defaults.keyboardDebounceDelayMillisecondsRange)
+
+        accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
+            self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
+        }
     }
 
     deinit {
         if let accessibilityPermissionObserverID {
             accessibilityManager.removePermissionChangeHandler(accessibilityPermissionObserverID)
         }
-        disableKeyboardEventTap()
+        keyboardTap.uninstall()
     }
 
     func startSystemServices() {
@@ -93,17 +99,15 @@ import Observation
         guard hasStartedSystemServices else { return }
 
         guard (keyboardBlocked || keyboardDebounceEnabled) && isAccessibilityEnabled else {
-            disableKeyboardEventTap()
+            keyboardTap.uninstall()
             return
         }
 
-        let eventMask = keyboardEventMaskForCurrentFeatures()
-        if keyboardEventTap == nil {
-            setupKeyboardEventTap(eventMask: eventMask)
-        } else if keyboardEventMask != eventMask {
-            disableKeyboardEventTap()
-            setupKeyboardEventTap(eventMask: eventMask)
-        }
+        keyboardTap.install(
+            eventMask: keyboardEventMaskForCurrentFeatures(),
+            callback: keyboardEventCallback,
+            target: self
+        )
     }
 
     private func keyboardEventMaskForCurrentFeatures() -> CGEventMask {
@@ -117,51 +121,31 @@ import Observation
         return CGEventMask(eventMask)
     }
 
-    private func setupKeyboardEventTap(eventMask: CGEventMask) {
-        guard keyboardEventTap == nil else { return }
+    fileprivate func reenableKeyboardEventTap() {
+        keyboardTap.reenable()
+    }
 
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-
-        keyboardEventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: keyboardEventCallback,
-            userInfo: context
-        )
-
-        guard let keyboardEventTap else {
-            print("Failed to create keyboard event tap. App may need accessibility permissions.")
+    /// `.tapDisabledByUserInput` is user-initiated, so it is the one way out of a
+    /// full keyboard block that does not depend on the mouse. Releasing the block
+    /// takes priority over keeping the tap alive; silently re-arming it would
+    /// defeat the escape. Debounce is not a lockout, so it just gets its tap back.
+    fileprivate func handleUserInitiatedTapDisable() {
+        guard keyboardBlocked else {
+            print("[KeyboardManager] Keyboard tap disabled by user input; re-enabling for debounce.")
+            reenableKeyboardEventTap()
             return
         }
 
-        keyboardRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyboardEventTap, 0)
-        guard let keyboardRunLoopSource else {
-            disableKeyboardEventTap()
-            return
-        }
+        print("[KeyboardManager] Keyboard tap disabled by user input; releasing keyboard block.")
 
-        keyboardEventMask = eventMask
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: keyboardEventTap, enable: true)
-    }
-
-    private func disableKeyboardEventTap() {
-        if let keyboardEventTap {
-            CGEvent.tapEnable(tap: keyboardEventTap, enable: false)
-            CFMachPortInvalidate(keyboardEventTap)
-            self.keyboardEventTap = nil
-        }
-        keyboardEventMask = nil
-
-        if let keyboardRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), keyboardRunLoopSource, .commonModes)
-            self.keyboardRunLoopSource = nil
+        // Hop off the tap callback: clearing the flag tears this tap down, and
+        // invalidating a mach port from inside its own callout is best avoided.
+        DispatchQueue.main.async { [weak self] in
+            self?.keyboardBlocked = false
         }
     }
 
-    fileprivate func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+    internal func shouldSuppressKeyboardEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         if keyboardBlocked {
             return true
         }
@@ -170,12 +154,11 @@ import Observation
             return false
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-
         guard type == .keyDown else {
             return false
         }
 
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         return keyboardDebounceFilter.shouldSuppressKeyDown(
             keyCode: keyCode,
@@ -190,7 +173,7 @@ import Observation
     }
 }
 
-private func keyboardEventCallback(
+func keyboardEventCallback(
     proxy: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
@@ -201,6 +184,17 @@ private func keyboardEventCallback(
     }
 
     let keyboardManager = Unmanaged<KeyboardManager>.fromOpaque(refcon).takeUnretainedValue()
+
+    if type == .tapDisabledByUserInput {
+        keyboardManager.handleUserInitiatedTapDisable()
+        return Unmanaged.passRetained(event)
+    }
+
+    if type == .tapDisabledByTimeout {
+        print("[KeyboardManager] Keyboard tap disabled by timeout; re-enabling.")
+        keyboardManager.reenableKeyboardEventTap()
+        return Unmanaged.passRetained(event)
+    }
 
     if keyboardManager.shouldSuppressKeyboardEvent(event, type: type) {
         return nil

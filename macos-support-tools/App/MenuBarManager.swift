@@ -5,7 +5,7 @@ struct MenuBarManager: View {
     @Environment(KeyboardManager.self) var keyboardManager: KeyboardManager
     @Environment(MouseManager.self) var mouseManager: MouseManager
     @Environment(MusicLaunchInterceptor.self) var musicLaunchInterceptor: MusicLaunchInterceptor
-    @State private var launchAtLogin = LaunchAtLogin()
+    @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -43,6 +43,8 @@ struct MenuBarManager: View {
         }
         .padding(12)
         .frame(width: 230)
+        // LaunchAtLogin refreshes itself when the app becomes active, but opening the
+        // menu bar extra does not activate the app, so refresh explicitly here too.
         .onAppear {
             launchAtLogin.refresh()
         }
@@ -58,5 +60,6 @@ struct StatusBarManager_Previews: PreviewProvider {
             .environment(KeyboardManager(accessibilityManager: accessibilityManager))
             .environment(MouseManager(accessibilityManager: accessibilityManager))
             .environment(MusicLaunchInterceptor())
+            .environment(LaunchAtLogin())
     }
 }
