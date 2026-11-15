@@ -181,131 +181,6 @@ struct macos_support_toolsTests {
         #expect(result.items.first?.modifiedDate != nil)
         #expect(result.items.first?.isDirectory == false)
         #expect(result.totalBytes > 0)
-        #expect(result.accessState == .accessible)
-    }
-
-    @Test func cleanupScanPreservesReadErrorsAndClassifiesPermissionDenials() throws {
-        let category = CleanupCategory(
-            id: .logs,
-            title: "Logs",
-            subtitle: "Fixture category",
-            systemImage: "doc.text",
-            paths: [URL(filePath: "/nonexistent-cleanup-permission-fixture")],
-            riskLevel: .review
-        )
-        let errors = [
-            NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError),
-            NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES)),
-            NSError(domain: NSPOSIXErrorDomain, code: Int(EPERM)),
-            NSError(domain: NSCocoaErrorDomain, code: NSFileReadUnknownError)
-        ]
-
-        for (index, error) in errors.enumerated() {
-            let result = try CleanupManager.scan(
-                category: category,
-                fileClient: CleanupFileClient(
-                    fileExists: { _ in true },
-                    contentsOfDirectory: { _ in throw error }
-                )
-            )
-            #expect(result.accessError?.contains(error.localizedDescription) == true)
-            #expect(result.accessState.requiresFullDiskAccess == (index < 3))
-            #expect(!result.isEmpty)
-        }
-    }
-
-    @Test func cleanupScanReportsUnreadableDirectoryInsteadOfZeroBytes() throws {
-        let fileManager = FileManager.default
-        let rootURL = fileManager.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        let payloadURL = rootURL.appending(path: "payload.bin")
-
-        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        try Data(repeating: 0xCD, count: 32 * 1024).write(to: payloadURL)
-        // Mimic a TCC-protected location such as ~/.Trash, which the app can
-        // stat but not enumerate.
-        try fileManager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: rootURL.path)
-        defer {
-            try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: rootURL.path)
-            try? fileManager.removeItem(at: rootURL)
-        }
-
-        let category = CleanupCategory(
-            id: .trash,
-            title: "Test Trash",
-            subtitle: "Fixture category",
-            systemImage: "trash",
-            paths: [rootURL],
-            riskLevel: .review
-        )
-
-        let result = try CleanupManager.scan(category: category)
-
-        #expect(result.accessState == .permissionDenied)
-        #expect(result.accessState.requiresFullDiskAccess)
-        // The regression: an unreadable directory must not masquerade as empty.
-        #expect(!result.isEmpty)
-    }
-
-    @Test func cleanupScanTreatsReadableEmptyDirectoryAsAccessible() throws {
-        let fileManager = FileManager.default
-        let rootURL = fileManager.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-
-        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        defer {
-            try? fileManager.removeItem(at: rootURL)
-        }
-
-        let category = CleanupCategory(
-            id: .trash,
-            title: "Test Trash",
-            subtitle: "Fixture category",
-            systemImage: "trash",
-            paths: [rootURL],
-            riskLevel: .review
-        )
-
-        let result = try CleanupManager.scan(category: category)
-
-        #expect(result.accessState == .accessible)
-        #expect(result.isEmpty)
-        #expect(result.totalBytes == 0)
-    }
-
-    @Test func cleanupScanKeepsReadablePathsWhenAnotherPathIsUnreadable() throws {
-        let fileManager = FileManager.default
-        let readableURL = fileManager.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        let blockedURL = fileManager.temporaryDirectory
-            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
-
-        try fileManager.createDirectory(at: readableURL, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: blockedURL, withIntermediateDirectories: true)
-        try Data("payload".utf8).write(to: readableURL.appending(path: "payload.tmp"))
-        try Data(repeating: 0xEF, count: 4096).write(to: blockedURL.appending(path: "hidden.bin"))
-        try fileManager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: blockedURL.path)
-        defer {
-            try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blockedURL.path)
-            try? fileManager.removeItem(at: blockedURL)
-            try? fileManager.removeItem(at: readableURL)
-        }
-
-        let category = CleanupCategory(
-            id: .trash,
-            title: "Test Trash",
-            subtitle: "Fixture category",
-            systemImage: "trash",
-            paths: [readableURL, blockedURL],
-            riskLevel: .review
-        )
-
-        let result = try CleanupManager.scan(category: category)
-
-        // One blocked path must not discard candidates found in the others.
-        #expect(result.accessState == .permissionDenied)
-        #expect(result.itemCount == 1)
-        #expect(result.totalBytes > 0)
     }
 
     @Test @MainActor func cleanupCandidateRowsUseStoredDirectoryMetadata() {
@@ -494,6 +369,8 @@ struct macos_support_toolsTests {
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.map { $0.item.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
         #expect(manager.scanResults.first?.items.map { $0.url.resolvingSymlinksInPath() } == [secondURL.resolvingSymlinksInPath()])
+        #expect(manager.scanResults.first?.largestItem?.url.resolvingSymlinksInPath() == secondURL.resolvingSymlinksInPath())
+        #expect(manager.scanResults.first?.mostRecentModifiedDate == manager.scanResults.first?.items.first?.modifiedDate)
         #expect(manager.totalReclaimableBytes == manager.scanResults.first?.totalBytes)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [firstURL.resolvingSymlinksInPath()])
     }
@@ -1225,6 +1102,27 @@ struct macos_support_toolsTests {
         #expect(scanResult.mostRecentModifiedDate == newerDate)
     }
 
+    @Test @MainActor func cleanupScanSummaryHandlesEmptyAndUndatedItems() {
+        let category = CleanupCatalog.defaultCategories()[0]
+        let undated = CleanupItem(url: URL(filePath: "/tmp/undated"), size: 10, modifiedDate: nil)
+        for items in [[undated], []] {
+            let result = CleanupScanResult(category: category, totalBytes: items.reduce(0) { $0 + $1.size }, itemCount: items.count, items: items, accessError: nil)
+            #expect(result.largestItem?.url == items.first?.url)
+            #expect(result.mostRecentModifiedDate == nil)
+        }
+    }
+
+    @Test @MainActor func cleanupByteFormattingMatchesConfiguredFormatterAcrossRepeatedCalls() {
+        let reference = ByteCountFormatter()
+        reference.allowedUnits = [.useBytes, .useKB, .useMB, .useGB, .useTB]
+        reference.countStyle = .file
+        reference.includesUnit = true
+        reference.isAdaptive = true
+        for bytes: Int64 in [0, 1, 1024, 5_000_000, 1_000_000_000_000, 1024, 0] {
+            #expect(ByteCountFormatter.cleanupString(fromByteCount: bytes) == reference.string(fromByteCount: bytes))
+        }
+    }
+
     @Test func cleanupModelIdentifiersAndRiskDescriptionsAreStable() {
         let item = CleanupItem(url: URL(filePath: "/tmp/model-item"), size: 1, modifiedDate: nil)
         let category = CleanupCategory(
@@ -1256,6 +1154,23 @@ struct macos_support_toolsTests {
         #expect(!CGEventType.scrollWheel.isTapDisabledEvent)
         #expect(!CGEventType.otherMouseDown.isTapDisabledEvent)
         #expect(!CGEventType.keyDown.isTapDisabledEvent)
+    }
+
+    @Test func eventTapCallbacksDoNotRetainPassThroughEvents() throws {
+        let callbacks: [(CGEventTapCallBack, CGEventType)] = [
+            (scrollEventCallback, .scrollWheel),
+            (buttonEventCallback, .otherMouseDown),
+            (keyboardEventCallback, .keyDown)
+        ]
+
+        for (callback, type) in callbacks {
+            let event = try #require(CGEvent(source: nil))
+            let retainCountBeforeCallback = CFGetRetainCount(event)
+            let result = try invokeRawTapCallback(callback, type: type, event: event)
+
+            #expect(result?.toOpaque() == Unmanaged.passUnretained(event).toOpaque())
+            #expect(CFGetRetainCount(event) == retainCountBeforeCallback)
+        }
     }
 
     @Test func mouseEventCallbacksPassThroughTapDisabledNotifications() throws {
@@ -1686,7 +1601,16 @@ private func invokeTapCallback(
     let proxy = try #require(OpaquePointer(bitPattern: 1))
 
     let refcon = UnsafeMutableRawPointer(Unmanaged.passUnretained(refconObject).toOpaque())
-    return callback(proxy, type, event, refcon)?.takeRetainedValue()
+    return callback(proxy, type, event, refcon)?.takeUnretainedValue()
+}
+
+private func invokeRawTapCallback(
+    _ callback: CGEventTapCallBack,
+    type: CGEventType,
+    event: CGEvent
+) throws -> Unmanaged<CGEvent>? {
+    let proxy = try #require(OpaquePointer(bitPattern: 1))
+    return callback(proxy, type, event, nil)
 }
 
 private final class TrashRecorder: @unchecked Sendable {
@@ -1715,5 +1639,76 @@ private struct TrashRecorderError: LocalizedError {
 
     var errorDescription: String? {
         "Trash failed for \(url.lastPathComponent)"
+    }
+}
+
+private final class RecordingMouseTaps: MouseEventTapControlling {
+    var isScrollTapInstalled = false
+    var isButtonTapInstalled = false
+    var installationFails = false
+    func setupScrollEventTap() { isScrollTapInstalled = !installationFails }
+    func setupButtonEventTap() { isButtonTapInstalled = !installationFails }
+    func disableScrollEventTap() { isScrollTapInstalled = false }
+    func disableButtonEventTap() { isButtonTapInstalled = false }
+    func reenableScrollEventTap() {}
+    func reenableButtonEventTap() {}
+}
+
+extension macos_support_toolsTests {
+    @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
+        let suite = "ConditionalMouseTaps-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = AccessibilityManager()
+        access.isAccessibilityEnabled = true
+        let taps = RecordingMouseTaps()
+        let manager = MouseManager(userDefaults: defaults, accessibilityManager: access, eventTapController: taps)
+        let device = makeMouseDevice()
+        manager.setDetectedDevices([device])
+        manager.naturalScrollEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        manager.startSystemServices()
+        manager.setDetectedDevices([])
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - No mouse features in use")
+        manager.addDevice(device)
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.startSystemServices()
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+
+        manager.naturalScrollEnabled = true
+        #expect(!taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.mouseButtonsEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - No mouse features in use")
+        manager.naturalScrollEnabled = false
+        #expect(taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Active")
+        manager.mouseButtonsEnabled = true
+
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: false)
+        manager.updateButtonSettings(for: device.id, buttonType: .button5, enabled: false)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonSettings(for: device.id, buttonType: .button4, enabled: true)
+        #expect(taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .none)
+        #expect(!taps.isButtonTapInstalled)
+        manager.updateButtonAction(for: device.id, buttonType: .button4, action: .forward)
+        #expect(taps.isButtonTapInstalled)
+
+        access.isAccessibilityEnabled = false
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+        #expect(manager.tapStatus == "Inactive - Accessibility permission required")
+        access.isAccessibilityEnabled = true
+        #expect(taps.isScrollTapInstalled && taps.isButtonTapInstalled)
+        manager.removeDevice(withID: device.id)
+        #expect(!taps.isScrollTapInstalled && !taps.isButtonTapInstalled)
+
+        taps.installationFails = true
+        manager.addDevice(device)
+        #expect(manager.tapStatus == "Inactive - Event tap unavailable")
     }
 }

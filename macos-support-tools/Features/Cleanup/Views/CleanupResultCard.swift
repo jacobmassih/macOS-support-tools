@@ -34,18 +34,16 @@ struct CleanupResultCard: View {
                 Spacer(minLength: 16)
 
                 VStack(alignment: .trailing, spacing: 3) {
-                    if result.accessState.requiresFullDiskAccess {
-                        Text("Unavailable")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                    Text(result.isUnavailable ? "Unavailable" : ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
+                        .font(.title3.weight(.semibold))
 
-                        Text("Permission needed")
+                    if result.accessError != nil {
+                        Text(result.isUnavailable ? "Could not read contents" : "Partial scan")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
-                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
 
+                    if !result.isUnavailable {
                         Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -76,15 +74,15 @@ struct CleanupResultCard: View {
             if let accessError = result.accessError {
                 Divider()
 
-                Label("Unable to read all category contents", systemImage: "lock.fill")
+                Label("Unable to read all category contents", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
 
                 Text(accessError)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                if result.accessState.requiresFullDiskAccess {
-                    CleanupPermissionNotice(category: result.category)
+                if result.category.id == .trash {
+                    FullDiskAccessButton()
                 }
             }
 
@@ -98,42 +96,6 @@ struct CleanupResultCard: View {
                 CleanupPreviewDetails(result: result)
             }
         }
-    }
-}
-
-private struct CleanupPermissionNotice: View {
-    let category: CleanupCategory
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Full Disk Access required", systemImage: "exclamationmark.triangle")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.orange)
-
-            Text("macOS blocked this app from reading \(category.title), so its size could not be measured. Grant Full Disk Access, then scan again.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                FullDiskAccessButton()
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
-                if let path = category.paths.first {
-                    Button {
-                        NSWorkspace.shared.activateFileViewerSelecting([path])
-                    } label: {
-                        Label("Show in Finder", systemImage: "arrow.up.right.square")
-                    }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

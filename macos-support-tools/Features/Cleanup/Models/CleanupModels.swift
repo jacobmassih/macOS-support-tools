@@ -24,19 +24,6 @@ enum CleanupRiskLevel: String, Codable {
     }
 }
 
-/// Whether a scanned category could actually be read.
-///
-/// Without this, a directory the app is refused access to is indistinguishable
-/// from an empty one: both report zero bytes and zero items.
-enum CleanupAccessState: String, Codable {
-    case accessible
-    case permissionDenied
-
-    var requiresFullDiskAccess: Bool {
-        self == .permissionDenied
-    }
-}
-
 struct CleanupCategory: Identifiable, Codable {
     let id: CleanupCategoryID
     let title: String
@@ -59,7 +46,7 @@ struct CleanupItem: Identifiable, Codable {
     }
 }
 
-struct CleanupScanResult: Identifiable, Codable {
+struct CleanupScanResult: Identifiable {
     var id: CleanupCategoryID { category.id }
 
     let category: CleanupCategory
@@ -67,19 +54,28 @@ struct CleanupScanResult: Identifiable, Codable {
     let itemCount: Int
     let items: [CleanupItem]
     let accessError: String?
-    var accessState: CleanupAccessState = .accessible
 
-    /// `true` only when the category was readable and genuinely held nothing.
-    var isEmpty: Bool {
-        accessError == nil && accessState == .accessible && items.isEmpty
+    let largestItem: CleanupItem?
+    let mostRecentModifiedDate: Date?
+
+    var isUnavailable: Bool {
+        accessError != nil && items.isEmpty
     }
 
-    var largestItem: CleanupItem? {
-        items.max { $0.size < $1.size }
-    }
-
-    var mostRecentModifiedDate: Date? {
-        items.compactMap(\.modifiedDate).max()
+    nonisolated init(
+        category: CleanupCategory,
+        totalBytes: Int64,
+        itemCount: Int,
+        items: [CleanupItem],
+        accessError: String?
+    ) {
+        self.category = category
+        self.totalBytes = totalBytes
+        self.itemCount = itemCount
+        self.items = items
+        self.accessError = accessError
+        largestItem = items.max { $0.size < $1.size }
+        mostRecentModifiedDate = items.lazy.compactMap(\.modifiedDate).max()
     }
 }
 

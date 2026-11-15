@@ -29,7 +29,7 @@ func scrollEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
     guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
@@ -37,7 +37,7 @@ func scrollEventCallback(
     if type.isTapDisabledEvent {
         print("[MouseManager] Scroll tap disabled by the system; re-enabling.")
         manager.reenableScrollEventTap()
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     // Only apply scroll reversal if we have external mouse connected and conditions are met
@@ -45,7 +45,7 @@ func scrollEventCallback(
         reverseScrollIfNeeded(event)
     }
 
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 func reverseScrollIfNeeded(_ event: CGEvent) {
@@ -92,7 +92,7 @@ func buttonEventCallback(
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
         guard let refcon = refcon else {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     let manager = Unmanaged<MouseManager>.fromOpaque(refcon).takeUnretainedValue()
@@ -100,15 +100,15 @@ func buttonEventCallback(
     if type.isTapDisabledEvent {
         print("[MouseManager] Button tap disabled by the system; re-enabling.")
         manager.reenableButtonEventTap()
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     if manager.mouseButtonsEnabled == false {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     if manager.citrixPassthroughEnabled && manager.citrixMonitor.isCitrixActive {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     
@@ -132,7 +132,7 @@ func buttonEventCallback(
         break
     }
     
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Button Action Handler
@@ -141,7 +141,7 @@ private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Un
     // Only handle button down events to avoid duplicate actions
     let eventType = event.type
     if eventType != .otherMouseDown {
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     switch action {
@@ -168,7 +168,7 @@ private func handleButtonAction(event: CGEvent, action: MouseButtonAction) -> Un
         break
     }
     
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }
 
 // MARK: - Utility Functions

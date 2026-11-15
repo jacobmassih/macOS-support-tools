@@ -3,10 +3,8 @@ import SwiftUI
 struct CleanupSettingsView: View {
     @Environment(CleanupManager.self) private var cleanupManager
 
-    private var inaccessibleCategoryNames: String {
-        cleanupManager.inaccessibleCategories
-            .map(\.title)
-            .formatted(.list(type: .and))
+    private var incompleteCategoryNames: String {
+        cleanupManager.incompleteCategories.map(\.title).formatted(.list(type: .and))
     }
 
     var body: some View {
@@ -49,19 +47,24 @@ struct CleanupSettingsView: View {
                     .buttonStyle(.bordered)
                     .disabled(!cleanupManager.canClearAllCaches || cleanupManager.isScanning || cleanupManager.isCleaning)
 
-                    Button {
-                        Task {
-                            await cleanupManager.scan()
+                    if cleanupManager.isScanning {
+                        Button(role: .cancel) {
+                            cleanupManager.cancelScan()
+                        } label: {
+                            Label("Cancel Scan", systemImage: "xmark.circle")
                         }
-                    } label: {
-                        if cleanupManager.isScanning {
-                            Label("Scanning...", systemImage: "hourglass")
-                        } else {
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button {
+                            Task {
+                                await cleanupManager.scan()
+                            }
+                        } label: {
                             Label("Scan Mac", systemImage: "sparkle.magnifyingglass")
                         }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(cleanupManager.isCleaning)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning)
                 }
             }
 
@@ -74,11 +77,11 @@ struct CleanupSettingsView: View {
                 }
             }
 
-            if !cleanupManager.inaccessibleCategories.isEmpty {
+            if !cleanupManager.incompleteCategories.isEmpty {
                 Divider()
 
                 Label(
-                    "\(inaccessibleCategoryNames) could not be read, so this total is incomplete. Grant Full Disk Access and scan again.",
+                    "Some contents in \(incompleteCategoryNames) could not be read. This total is incomplete; review the affected categories and scan again.",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.subheadline)
