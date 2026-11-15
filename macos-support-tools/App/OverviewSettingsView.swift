@@ -61,6 +61,16 @@ struct OverviewSettingsView: View {
         }
 
         SettingsCard {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Version")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(AppVersionInfo.version)
+                    .fontWeight(.medium)
+            }
+        }
+
+        SettingsCard {
             SettingToggleRow(
                 title: "Natural scroll",
                 subtitle: "Keep scroll direction consistent with macOS when an external mouse is connected.",

@@ -10,19 +10,21 @@ import Observation
 
     enum Defaults {
         static let keyboardDebounceDelayMilliseconds = 45.0
+        static let keyboardDebounceDelayMillisecondsRange = 5.0...100.0
     }
 
     var tapStatus = KeyboardTapStatus.idle
-    var keyboardDebounceEnabled = false {
+    var keyboardDebounceEnabled: Bool {
         didSet {
             userDefaults.set(keyboardDebounceEnabled, forKey: DefaultsKey.keyboardDebounceEnabled)
             updateKeyboardEventTap()
             resetKeyboardDebounceFilter()
         }
     }
-    var keyboardDebounceDelayMilliseconds = Defaults.keyboardDebounceDelayMilliseconds {
+    var keyboardDebounceDelayMilliseconds: Double {
         didSet {
-            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds.clamped(to: 5...100)
+            let clampedDelayMilliseconds = keyboardDebounceDelayMilliseconds
+                .clamped(to: Defaults.keyboardDebounceDelayMillisecondsRange)
             guard keyboardDebounceDelayMilliseconds == clampedDelayMilliseconds else {
                 keyboardDebounceDelayMilliseconds = clampedDelayMilliseconds
                 return
@@ -56,6 +58,22 @@ import Observation
     ) {
         self.userDefaults = userDefaults
         self.accessibilityManager = accessibilityManager
+
+        userDefaults.register(defaults: [
+            DefaultsKey.keyboardDebounceEnabled: false,
+            DefaultsKey.keyboardDebounceDelayMilliseconds: Defaults.keyboardDebounceDelayMilliseconds
+        ])
+
+        // These are initialised, not assigned, so the `didSet` observers stay
+        // silent: assigning would write the registered fallbacks back into the
+        // persistent domain and turn a code-owned default into a stored value
+        // the user never chose. Initialisation also skips the observer's clamp,
+        // so a persisted out-of-range delay is clamped explicitly here.
+        self.keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
+        self.keyboardDebounceDelayMilliseconds = userDefaults
+            .double(forKey: DefaultsKey.keyboardDebounceDelayMilliseconds)
+            .clamped(to: Defaults.keyboardDebounceDelayMillisecondsRange)
+
         self.eventTapController = KeyboardEventTapController(
             onBlockReleasedByUser: { [weak self] in
                 // Hop to the main thread: the release runs on the tap thread, and
@@ -77,16 +95,6 @@ import Observation
         accessibilityPermissionObserverID = accessibilityManager.observePermissionChanges { [weak self] isAccessibilityEnabled in
             self?.handleAccessibilityPermissionDidChange(isAccessibilityEnabled)
         }
-
-        userDefaults.register(defaults: [
-            DefaultsKey.keyboardDebounceEnabled: false,
-            DefaultsKey.keyboardDebounceDelayMilliseconds: Defaults.keyboardDebounceDelayMilliseconds
-        ])
-
-        keyboardDebounceEnabled = userDefaults.bool(forKey: DefaultsKey.keyboardDebounceEnabled)
-        keyboardDebounceDelayMilliseconds = userDefaults.double(
-            forKey: DefaultsKey.keyboardDebounceDelayMilliseconds
-        )
         updateTapStatus()
     }
 

@@ -7,6 +7,10 @@ import Testing
 @testable import macos_support_tools
 
 struct macos_support_toolsTests {
+    @Test func appVersionInfoReadsBundleMetadata() {
+        #expect(!AppVersionInfo.version.isEmpty)
+    }
+
 
     @Test func hidDeviceClassifierRejectsKeyboardDevices() {
         let keyboardUsage = HIDDeviceDescriptor(
@@ -85,6 +89,38 @@ struct macos_support_toolsTests {
         #expect(result.items.first?.url.resolvingSymlinksInPath() == appBundleURL.resolvingSymlinksInPath())
         #expect(result.items.first?.isDirectory == true)
         #expect(result.totalBytes >= Int64(payload.count))
+    }
+
+    @Test func cleanupScanCountsNestedDirectorySizes() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let trashItemURL = rootURL.appending(path: "trash-item", directoryHint: .isDirectory)
+        let nestedDirURL = trashItemURL.appending(path: "nested", directoryHint: .isDirectory)
+        let fileInNestedURL = nestedDirURL.appending(path: "file.bin")
+        let fileData = Data(repeating: 0xCD, count: 8192)
+
+        try fileManager.createDirectory(at: nestedDirURL, withIntermediateDirectories: true)
+        try fileData.write(to: fileInNestedURL)
+        defer {
+            try? fileManager.removeItem(at: rootURL)
+        }
+
+        let category = CleanupCategory(
+            id: .trash,
+            title: "Test Trash",
+            subtitle: "Fixture category",
+            systemImage: "trash",
+            paths: [rootURL],
+            riskLevel: .review
+        )
+
+        let result = try CleanupManager.scan(category: category)
+
+        #expect(result.itemCount == 1)
+        #expect(result.items.first?.isDirectory == true)
+        // Verify that nested directory size is included in total
+        #expect(result.totalBytes >= Int64(fileData.count))
     }
 
     @Test func cleanupScanIgnoresZeroByteCandidates() throws {
@@ -406,6 +442,61 @@ struct macos_support_toolsTests {
         #expect(manager.lastCleanupResult?.trashedItems.map { $0.url.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
         #expect(manager.lastCleanupResult?.skippedItems.isEmpty == true)
         #expect(recorder.urls.map { $0.resolvingSymlinksInPath() } == [cacheItemURL.resolvingSymlinksInPath()])
+    }
+
+    @Test func cleanupScanReportsTrashReadErrors() throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+       let fileClient = CleanupFileClient(
+           contentsOfDirectory: { _ in
+               throw CocoaError(.fileReadNoPermission)
+           }
+       )
+
+       let result = try CleanupManager.scan(category: category, fileClient: fileClient)
+
+       #expect(result.itemCount == 0)
+       #expect(result.accessError?.contains("permission") == true)
+    }
+
+    @Test func cleanupScanTreatsReadableEmptyTrashAsEmpty() throws {
+       let fileManager = FileManager.default
+       let rootURL = fileManager.temporaryDirectory
+           .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+       try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+       defer {
+           try? fileManager.removeItem(at: rootURL)
+       }
+
+       let category = CleanupCategory(
+           id: .trash,
+           title: "Trash",
+           subtitle: "Test trash",
+           systemImage: "trash",
+           paths: [rootURL],
+           riskLevel: .review
+       )
+
+       let result = try CleanupManager.scan(category: category)
+
+       #expect(result.itemCount == 0)
+       #expect(result.accessError == nil)
     }
 
     @Test @MainActor func cleanupManagerDefaultCategoriesSelectExpectedPaths() {
@@ -1005,7 +1096,8 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: 60,
             itemCount: 3,
-            items: [smallItem, mediumItem, largeItem]
+            items: [smallItem, mediumItem, largeItem],
+            accessError: nil
         )
 
         #expect(scanResult.largestItem?.url == largeItem.url)
@@ -1026,7 +1118,8 @@ struct macos_support_toolsTests {
             category: category,
             totalBytes: item.size,
             itemCount: 1,
-            items: [item]
+            items: [item],
+            accessError: nil
         )
 
         #expect(CleanupCategoryID.logs.id == "logs")
@@ -1485,6 +1578,69 @@ struct macos_support_toolsTests {
             let decoded = try decoder.decode(MouseButtonAction.self, from: data)
             #expect(decoded == action)
         }
+    }
+
+    // `object(forKey:)` also reports registration-domain values, so it cannot tell
+    // a registered fallback apart from a stored one. `persistentDomain(forName:)`
+    // sees only what was actually written, which is what these tests care about.
+    @Test func mouseManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "MouseManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeMouseManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[MouseManager.DefaultsKey.mouseButtonsEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.naturalScrollEnabled] == nil)
+        #expect(persistentDomain[MouseManager.DefaultsKey.citrixPassthroughEnabled] == nil)
+
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.mouseButtonsEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.naturalScrollEnabled))
+        #expect(userDefaults.bool(forKey: MouseManager.DefaultsKey.citrixPassthroughEnabled))
+
+        #expect(manager.mouseButtonsEnabled)
+        #expect(manager.naturalScrollEnabled)
+        #expect(manager.citrixPassthroughEnabled)
+    }
+
+    @Test func keyboardManagerInitDoesNotPersistRegisteredDefaults() throws {
+        let suiteName = "KeyboardManagerRegisteredDefaultsTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let manager = makeKeyboardManager(userDefaults: userDefaults)
+        let persistentDomain = userDefaults.persistentDomain(forName: suiteName) ?? [:]
+
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceEnabled] == nil)
+        #expect(persistentDomain[KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds] == nil)
+
+        #expect(!userDefaults.bool(forKey: KeyboardManager.DefaultsKey.keyboardDebounceEnabled))
+        #expect(
+            userDefaults.double(forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+                == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds
+        )
+
+        #expect(!manager.keyboardDebounceEnabled)
+        #expect(manager.keyboardDebounceDelayMilliseconds == KeyboardManager.Defaults.keyboardDebounceDelayMilliseconds)
+    }
+
+    @Test func keyboardManagerClampsPersistedDebounceWindowOnLoad() throws {
+        let suiteName = "KeyboardManagerPersistedClampTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        userDefaults.set(500, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 100)
+
+        userDefaults.set(1, forKey: KeyboardManager.DefaultsKey.keyboardDebounceDelayMilliseconds)
+        #expect(makeKeyboardManager(userDefaults: userDefaults).keyboardDebounceDelayMilliseconds == 5)
     }
 
     @Test func launchAtLoginRefreshReflectsRegistrationState() {

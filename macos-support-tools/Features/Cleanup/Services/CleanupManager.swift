@@ -47,8 +47,9 @@ final class CleanupManager {
                 of: (offset: Int, result: CleanupScanResult).self
             ) { group in
                 for (offset, category) in categoriesToScan.enumerated() {
+                    let fileClient = fileClient
                     group.addTask(priority: .userInitiated) {
-                        (offset, try Self.scan(category: category))
+                        (offset, try Self.scan(category: category, fileClient: fileClient))
                     }
                 }
 
@@ -106,23 +107,48 @@ final class CleanupManager {
         await clean(items: cacheResult.items)
     }
 
-    nonisolated static func scan(category: CleanupCategory) throws -> CleanupScanResult {
-        let items = category.paths.flatMap { path -> [CleanupItem] in
-            guard FileManager.default.fileExists(atPath: path.path) else {
-                return []
+    nonisolated static func scan(
+        category: CleanupCategory,
+        fileClient: CleanupFileClient = .live
+    ) throws -> CleanupScanResult {
+        var items: [CleanupItem] = []
+        var accessErrors: [String] = []
+
+        for path in category.paths {
+            guard category.id == .trash || fileClient.fileExists(path) else {
+                continue
             }
 
-            return cleanupItems(in: path)
+            do {
+                if let values = try? path.resourceValues(forKeys: [.isDirectoryKey]),
+                   values.isDirectory == false {
+                    items.append(cleanupItem(at: path))
+                } else {
+                    items.append(contentsOf: try fileClient.contentsOfDirectory(path).map(cleanupItem(at:)))
+                }
+            } catch {
+                if !isMissingPathError(error) {
+                    accessErrors.append("\(path.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
         }
-        .filter { $0.size > 0 }
-        .sorted { $0.size > $1.size }
+
+        items = items
+            .filter { $0.size > 0 }
+            .sorted { $0.size > $1.size }
 
         return CleanupScanResult(
             category: category,
             totalBytes: items.reduce(0) { $0 + $1.size },
             itemCount: items.count,
-            items: items
+            items: items,
+            accessError: accessErrors.isEmpty ? nil : accessErrors.joined(separator: "\n")
         )
+    }
+
+    nonisolated private static func isMissingPathError(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == NSCocoaErrorDomain && error.code == CocoaError.fileReadNoSuchFile.rawValue
     }
 
     nonisolated static func clean(
@@ -165,7 +191,8 @@ final class CleanupManager {
                 category: result.category,
                 totalBytes: remainingItems.reduce(0) { $0 + $1.size },
                 itemCount: remainingItems.count,
-                items: remainingItems
+                items: remainingItems,
+                accessError: result.accessError
             )
         }
     }
@@ -185,18 +212,6 @@ final class CleanupManager {
         .totalFileAllocatedSizeKey,
         .fileAllocatedSizeKey
     ]
-
-    nonisolated private static func cleanupItems(in directoryURL: URL) -> [CleanupItem] {
-        guard let childURLs = try? FileManager.default.contentsOfDirectory(
-            at: directoryURL,
-            includingPropertiesForKeys: Array(itemResourceKeys),
-            options: []
-        ) else {
-            return [cleanupItem(at: directoryURL)]
-        }
-
-        return childURLs.map(cleanupItem(at:))
-    }
 
     nonisolated private static func cleanupItem(at url: URL) -> CleanupItem {
         let values = try? url.resourceValues(forKeys: itemResourceKeys)
@@ -232,6 +247,8 @@ final class CleanupManager {
             }
 
             if values.isRegularFile == true {
+                totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+            } else if values.isDirectory == true {
                 totalBytes += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
             }
         }

@@ -18,19 +18,19 @@ import Observation
         accessibilityManager.isAccessibilityEnabled
     }
     var tapStatus = MouseTapStatus.idle
-    var mouseButtonsEnabled = true {
+    var mouseButtonsEnabled: Bool {
         didSet {
             userDefaults.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
             syncTapConfiguration()
         }
     }
-    var naturalScrollEnabled = true {
+    var naturalScrollEnabled: Bool {
         didSet {
             userDefaults.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
             syncTapConfiguration()
         }
     }
-    var citrixPassthroughEnabled = true {
+    var citrixPassthroughEnabled: Bool {
         didSet {
             userDefaults.set(citrixPassthroughEnabled, forKey: DefaultsKey.citrixPassthroughEnabled)
             syncTapConfiguration()
@@ -55,6 +55,21 @@ import Observation
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
         self.accessibilityManager = accessibilityManager
+
+        userDefaults.register(defaults: [
+            DefaultsKey.mouseButtonsEnabled: true,
+            DefaultsKey.naturalScrollEnabled: true,
+            DefaultsKey.citrixPassthroughEnabled: true
+        ])
+
+        // These are initialised, not assigned, so the `didSet` observers stay
+        // silent: assigning would write the registered fallbacks back into the
+        // persistent domain and turn a code-owned default into a stored value
+        // the user never chose.
+        self.naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
+        self.mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
+        self.citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
+
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
         self.eventTapController = MouseEventTapController { [weak self] in
             // A tap can be left disabled from the tap thread, so bring the news
@@ -72,17 +87,7 @@ import Observation
             self?.syncTapConfiguration()
         }
 
-        userDefaults.register(defaults: [
-            DefaultsKey.mouseButtonsEnabled: true,
-            DefaultsKey.naturalScrollEnabled: true,
-            DefaultsKey.citrixPassthroughEnabled: true
-        ])
-
         loadDeviceSettings()
-
-        naturalScrollEnabled = userDefaults.bool(forKey: DefaultsKey.naturalScrollEnabled)
-        mouseButtonsEnabled = userDefaults.bool(forKey: DefaultsKey.mouseButtonsEnabled)
-        citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
         updateTapStatus()
     }
 
