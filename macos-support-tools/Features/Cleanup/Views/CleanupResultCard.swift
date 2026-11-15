@@ -121,7 +121,7 @@ private struct CleanupPreviewDetails: View {
                     .foregroundStyle(.secondary)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(result.items.prefix(candidatePreviewLimit)) { item in
                             CleanupCandidateRow(item: item)
                         }
