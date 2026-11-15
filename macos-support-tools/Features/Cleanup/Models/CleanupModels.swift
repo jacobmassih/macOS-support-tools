@@ -58,6 +58,10 @@ struct CleanupScanResult: Identifiable {
     let largestItem: CleanupItem?
     let mostRecentModifiedDate: Date?
 
+    var isUnavailable: Bool {
+        accessError != nil && items.isEmpty
+    }
+
     nonisolated init(
         category: CleanupCategory,
         totalBytes: Int64,

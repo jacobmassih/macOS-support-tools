@@ -3,6 +3,10 @@ import SwiftUI
 struct CleanupSettingsView: View {
     @Environment(CleanupManager.self) private var cleanupManager
 
+    private var incompleteCategoryNames: String {
+        cleanupManager.incompleteCategories.map(\.title).formatted(.list(type: .and))
+    }
+
     var body: some View {
         SettingsHeader(
             title: "Disk Cleanup",
@@ -71,6 +75,18 @@ struct CleanupSettingsView: View {
                     Text(lastScanDate.formatted(date: .abbreviated, time: .standard))
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            if !cleanupManager.incompleteCategories.isEmpty {
+                Divider()
+
+                Label(
+                    "Some contents in \(incompleteCategoryNames) could not be read. This total is incomplete; review the affected categories and scan again.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             if let lastError = cleanupManager.lastError {

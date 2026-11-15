@@ -34,12 +34,20 @@ struct CleanupResultCard: View {
                 Spacer(minLength: 16)
 
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
+                    Text(result.isUnavailable ? "Unavailable" : ByteCountFormatter.cleanupString(fromByteCount: result.totalBytes))
                         .font(.title3.weight(.semibold))
 
-                    Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if result.accessError != nil {
+                        Text(result.isUnavailable ? "Could not read contents" : "Partial scan")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    if !result.isUnavailable {
+                        Text("\(result.itemCount) candidate\(result.itemCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Button {
@@ -63,17 +71,19 @@ struct CleanupResultCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if result.category.id == .trash, let accessError = result.accessError {
+            if let accessError = result.accessError {
                 Divider()
 
-                Label("Unable to read Trash contents", systemImage: "lock.fill")
+                Label("Unable to read all category contents", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
 
                 Text(accessError)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                FullDiskAccessButton()
+                if result.category.id == .trash {
+                    FullDiskAccessButton()
+                }
             }
 
             if result.items.isEmpty {

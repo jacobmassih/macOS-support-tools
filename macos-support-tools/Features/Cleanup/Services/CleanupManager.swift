@@ -18,6 +18,10 @@ final class CleanupManager {
         scanResults.reduce(0) { $0 + $1.totalBytes }
     }
 
+    var incompleteCategories: [CleanupCategory] {
+        scanResults.filter { $0.accessError != nil }.map(\.category)
+    }
+
     var canClearAllCaches: Bool {
         scanResults.contains { $0.category.id == .userCaches }
     }
