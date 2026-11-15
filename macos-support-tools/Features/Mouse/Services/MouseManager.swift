@@ -11,7 +11,9 @@ import Observation
         static let citrixPassthroughEnabled = "CitrixPassthroughEnabled"
     }
 
-    var connectedDevices: [MouseDevice] = []
+    var connectedDevices: [MouseDevice] = [] {
+        didSet { updateMouseEventTaps() }
+    }
     var deviceSettings: [String: MouseDevice] = [:]
     var isAnyExternalMouseConnected: Bool { !connectedDevices.isEmpty }
     var isAccessibilityEnabled: Bool {
@@ -21,11 +23,13 @@ import Observation
     var mouseButtonsEnabled: Bool {
         didSet {
             userDefaults.set(mouseButtonsEnabled, forKey: DefaultsKey.mouseButtonsEnabled)
+            updateMouseEventTaps()
         }
     }
     var naturalScrollEnabled: Bool {
         didSet {
             userDefaults.set(naturalScrollEnabled, forKey: DefaultsKey.naturalScrollEnabled)
+            updateMouseEventTaps()
         }
     }
     var citrixPassthroughEnabled: Bool {
@@ -42,12 +46,13 @@ import Observation
     @ObservationIgnored private var hasStartedSystemServices = false
     @ObservationIgnored private var accessibilityPermissionObserverID: UUID?
     @ObservationIgnored private var deviceMonitor: HIDMouseDeviceMonitor!
-    @ObservationIgnored private var eventTapController: MouseEventTapController!
+    @ObservationIgnored private var eventTapController: (any MouseEventTapControlling)!
 
     init(
         userDefaults: UserDefaults = .standard,
         deviceStore: MouseDeviceStore? = nil,
-        accessibilityManager: AccessibilityManager
+        accessibilityManager: AccessibilityManager,
+        eventTapController: (any MouseEventTapControlling)? = nil
     ) {
         self.userDefaults = userDefaults
         self.deviceStore = deviceStore ?? MouseDeviceStore(userDefaults: userDefaults)
@@ -68,7 +73,7 @@ import Observation
         self.citrixPassthroughEnabled = userDefaults.bool(forKey: DefaultsKey.citrixPassthroughEnabled)
 
         self.deviceMonitor = HIDMouseDeviceMonitor(manager: self)
-        self.eventTapController = MouseEventTapController(manager: self)
+        self.eventTapController = eventTapController ?? MouseEventTapController(manager: self)
         self.accessibilityPermissionObserverID = self.accessibilityManager.observePermissionChanges { [weak self] _ in
             self?.handleAccessibilityPermissionDidChange()
         }
@@ -91,18 +96,37 @@ import Observation
 
         hasStartedSystemServices = true
         deviceMonitor.start()
-        eventTapController.setupScrollEventTap()
-        eventTapController.setupButtonEventTap()
-        updateTapStatus()
+        updateMouseEventTaps()
     }
 
     private func handleAccessibilityPermissionDidChange() {
-        updateTapStatus()
+        updateMouseEventTaps()
+    }
 
-        if hasStartedSystemServices && isAccessibilityEnabled {
-            eventTapController.setupScrollEventTap()
-            eventTapController.setupButtonEventTap()
+    private var needsButtonEventTap: Bool {
+        guard mouseButtonsEnabled, let device = getCurrentActiveDevice() else { return false }
+        return (device.button4Enabled && device.button4Action != .none)
+            || (device.button5Enabled && device.button5Action != .none)
+    }
+
+    private func updateMouseEventTaps() {
+        guard hasStartedSystemServices else {
+            updateTapStatus()
+            return
         }
+
+        if isAccessibilityEnabled && shouldReverseScroll() {
+            eventTapController.setupScrollEventTap()
+        } else {
+            eventTapController.disableScrollEventTap()
+        }
+
+        if isAccessibilityEnabled && needsButtonEventTap {
+            eventTapController.setupButtonEventTap()
+        } else {
+            eventTapController.disableButtonEventTap()
+        }
+        updateTapStatus()
     }
 
     func updateButtonSettings(for deviceId: String, buttonType: MouseButtonType, enabled: Bool) {
@@ -191,7 +215,11 @@ import Observation
     internal func updateTapStatus() {
         if !isAccessibilityEnabled {
             tapStatus = "Inactive - Accessibility permission required"
-        } else if eventTapController.hasRequiredMouseEventTaps {
+        } else if !shouldReverseScroll() && !needsButtonEventTap {
+            tapStatus = "Inactive - No mouse features in use"
+        } else if hasStartedSystemServices
+                    && (!shouldReverseScroll() || eventTapController.isScrollTapInstalled)
+                    && (!needsButtonEventTap || eventTapController.isButtonTapInstalled) {
             tapStatus = "Active"
         } else {
             tapStatus = "Inactive - Event tap unavailable"

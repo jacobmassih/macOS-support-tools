@@ -1,14 +1,24 @@
 import Foundation
 import CoreGraphics
 
-final class MouseEventTapController {
+protocol MouseEventTapControlling: AnyObject {
+    var isScrollTapInstalled: Bool { get }
+    var isButtonTapInstalled: Bool { get }
+    func setupScrollEventTap()
+    func setupButtonEventTap()
+    func disableScrollEventTap()
+    func disableButtonEventTap()
+    func reenableScrollEventTap()
+    func reenableButtonEventTap()
+}
+
+final class MouseEventTapController: MouseEventTapControlling {
     private weak var manager: MouseManager?
     private let scrollTap = EventTap(label: "scroll")
     private let buttonTap = EventTap(label: "mouse button")
 
-    var hasRequiredMouseEventTaps: Bool {
-        scrollTap.isInstalled && buttonTap.isInstalled
-    }
+    var isScrollTapInstalled: Bool { scrollTap.isInstalled }
+    var isButtonTapInstalled: Bool { buttonTap.isInstalled }
 
     init(manager: MouseManager) {
         self.manager = manager
