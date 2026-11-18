@@ -87,14 +87,15 @@ struct macos_support_toolsTests {
         interceptor.isEnabled = true
         center.post(name: NSWorkspace.didLaunchApplicationNotification, object: nil)
         interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
-        try #require(completion)(false)
+        #expect(completion != nil)
+        completion?(false)
         #expect(quits == 0)
         interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
-        try #require(completion)(true)
+        completion?(true)
         #expect(quits == 1)
         interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
         interceptor.isEnabled = false
-        try #require(completion)(true)
+        completion?(true)
         #expect(quits == 1)
         url = nil
         completion = nil
