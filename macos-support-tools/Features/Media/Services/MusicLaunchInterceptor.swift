@@ -36,12 +36,27 @@ import Observation
     private(set) var isSpotifyInstalled = false
 
     @ObservationIgnored private let userDefaults: UserDefaults
-    @ObservationIgnored private let workspace: NSWorkspace
+    @ObservationIgnored private let center: NotificationCenter
+    @ObservationIgnored private let spotifyURL: () -> URL?
+    @ObservationIgnored private let openSpotify: (URL, @escaping (Bool) -> Void) -> Void
     @ObservationIgnored private var observer: NSObjectProtocol?
 
-    init(userDefaults: UserDefaults = .standard, workspace: NSWorkspace = .shared) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        center: NotificationCenter = NSWorkspace.shared.notificationCenter,
+        spotifyURL: @escaping () -> URL? = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: MediaBundleID.spotify)
+        },
+        openSpotify: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
+            NSWorkspace.shared.openApplication(at: url, configuration: .init()) { application, error in
+                DispatchQueue.main.async { completion(application != nil && error == nil) }
+            }
+        }
+    ) {
         self.userDefaults = userDefaults
-        self.workspace = workspace
+        self.center = center
+        self.spotifyURL = spotifyURL
+        self.openSpotify = openSpotify
 
         userDefaults.register(defaults: [DefaultsKey.isEnabled: false])
         isEnabled = userDefaults.bool(forKey: DefaultsKey.isEnabled)
@@ -58,16 +73,14 @@ import Observation
 
     /// Re-check whether Spotify is installed (e.g. when the settings window appears).
     func refreshSpotifyInstalled() {
-        isSpotifyInstalled = workspace.urlForApplication(
-            withBundleIdentifier: MediaBundleID.spotify
-        ) != nil
+        isSpotifyInstalled = spotifyURL() != nil
     }
 
     private func startObserving() {
         guard observer == nil else { return }
         refreshSpotifyInstalled()
 
-        observer = workspace.notificationCenter.addObserver(
+        observer = center.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification,
             object: nil,
             queue: .main
@@ -78,7 +91,7 @@ import Observation
 
     private func stopObserving() {
         if let observer {
-            workspace.notificationCenter.removeObserver(observer)
+            center.removeObserver(observer)
             self.observer = nil
         }
     }
@@ -89,32 +102,23 @@ import Observation
             return
         }
 
-        refreshSpotifyInstalled()
-
-        let decision = MusicLaunchInterceptorCore.action(
-            forLaunchedBundleID: app.bundleIdentifier,
-            isEnabled: isEnabled,
-            isSpotifyInstalled: isSpotifyInstalled
-        )
-
-        guard decision == .redirectToSpotify else { return }
-
-        // Kill the freshly launched Music, preferring a graceful terminate.
-        if !app.terminate() {
-            app.forceTerminate()
-        }
-        launchSpotify()
+        handleLaunch(bundleID: app.bundleIdentifier) { _ = app.terminate() }
     }
 
-    private func launchSpotify() {
-        guard let spotifyURL = workspace.urlForApplication(
-            withBundleIdentifier: MediaBundleID.spotify
-        ) else {
-            return
-        }
+    func handleLaunch(bundleID: String?, terminateMusic: @escaping () -> Void) {
+        guard bundleID == MediaBundleID.appleMusic else { return }
+        let url = spotifyURL()
+        isSpotifyInstalled = url != nil
+        guard MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: bundleID,
+            isEnabled: isEnabled,
+            isSpotifyInstalled: isSpotifyInstalled
+        ) == .redirectToSpotify, let url else { return }
 
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        workspace.openApplication(at: spotifyURL, configuration: configuration)
+        openSpotify(url) { [weak self] opened in
+            if opened && self?.isEnabled == true {
+                terminateMusic()
+            }
+        }
     }
 }

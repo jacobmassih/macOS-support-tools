@@ -74,6 +74,36 @@ struct macos_support_toolsTests {
     }
 
 
+    @MainActor @Test func musicWaitsForSuccessfulSpotifyLaunchBeforeQuitting() throws {
+        let suite = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let center = NotificationCenter()
+        var url: URL? = URL(filePath: "/fixture/Spotify.app")
+        var completion: ((Bool) -> Void)?
+        var quits = 0
+        let interceptor = MusicLaunchInterceptor(userDefaults: defaults, center: center,
+            spotifyURL: { url }, openSpotify: { _, callback in completion = callback })
+        interceptor.isEnabled = true
+        center.post(name: NSWorkspace.didLaunchApplicationNotification, object: nil)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        try #require(completion)(false)
+        #expect(quits == 0)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        try #require(completion)(true)
+        #expect(quits == 1)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        interceptor.isEnabled = false
+        try #require(completion)(true)
+        #expect(quits == 1)
+        url = nil
+        completion = nil
+        interceptor.isEnabled = true
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        #expect(completion == nil)
+        #expect(!interceptor.isSpotifyInstalled)
+    }
+
     @Test func appVersionInfoReadsBundleMetadata() {
         #expect(!AppVersionInfo.version.isEmpty)
     }
