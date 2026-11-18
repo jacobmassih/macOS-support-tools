@@ -85,11 +85,15 @@ final class ThermalManager {
 
     @MainActor
     func refresh() async {
+        guard !Task.isCancelled else { return }
         isRefreshing = true
 
         do {
-            reading = try await sensorClient.read()
+            let result = try await sensorClient.read()
+            guard !Task.isCancelled else { return }
+            reading = result
         } catch {
+            guard !Task.isCancelled else { return }
             let message = error.localizedDescription
             reading = ThermalReading(
                 cpuCelsius: nil,
@@ -135,6 +139,7 @@ final class ThermalManager {
     private func updatePollingState() {
         pollingTask?.cancel()
         pollingTask = nil
+        isRefreshing = false
 
         guard showTemperatureInMenuBar else {
             reading = .idle

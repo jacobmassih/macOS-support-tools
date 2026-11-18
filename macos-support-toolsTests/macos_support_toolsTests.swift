@@ -1514,6 +1514,20 @@ struct macos_support_toolsTests {
         #expect(unavailable.statusDescription == "Temperature sensors unavailable")
     }
 
+    @MainActor
+    @Test func disablingThermalDisplayDuringReadKeepsItIdle() async throws {
+        let manager = ThermalManager(sensorClient: .mock {
+            try await Task.sleep(for: .seconds(60))
+            return .idle
+        }, userDefaults: makeIsolatedUserDefaults())
+        manager.showTemperatureInMenuBar = true
+        try await pollUntil { manager.isRefreshing }
+        manager.showTemperatureInMenuBar = false
+        await Task.yield()
+        #expect(manager.reading == .idle)
+        #expect(!manager.isRefreshing)
+    }
+
     /// Enabling the toggle must start a repeating poll, and disabling it must stop it and
     /// reset the reading rather than leave a stale temperature on screen.
     @MainActor
