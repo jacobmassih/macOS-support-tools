@@ -36,7 +36,7 @@ final class HIDMouseDeviceMonitor {
         IOHIDManagerRegisterInputValueCallback(hidManager, { context, result, _, value in
             guard result == kIOReturnSuccess, let context, IOHIDValueGetIntegerValue(value) != 0 else { return }
             let element = IOHIDValueGetElement(value)
-            guard let device = IOHIDElementGetDevice(element) else { return }
+            let device = IOHIDElementGetDevice(element)
             let manager = Unmanaged<MouseManager>.fromOpaque(context).takeUnretainedValue()
             manager.recordSideButton(deviceID: device.deviceID,
                                      button: Int64(IOHIDElementGetUsage(element)) - 1,
