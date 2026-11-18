@@ -88,6 +88,7 @@ jobs:
       - name: Check changed-line coverage
         run: |
           set +e
+          # SwiftUI view rendering is exercised by UI tests outside the unit coverage report.
           diff-cover coverage/cobertura.xml \
             --compare-branch="origin/${{ github.base_ref }}" \
             --fail-under=80 \
@@ -95,10 +96,6 @@ jobs:
             --exclude \
               '*/Views/*' \
               '*View.swift' \
-              '*/InputEvents/*' \
-              '*EventTap.swift' \
-              '*KeyboardManager.swift' \
-              '*HIDMouseDeviceMonitor.swift' \
             --format markdown:coverage/diff-cover.md
           status=$?
 
