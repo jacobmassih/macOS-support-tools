@@ -50,19 +50,30 @@ struct CleanupResultCard: View {
                     }
                 }
 
-                Button {
-                    Task {
-                        await cleanupManager.clean(items: result.items)
+                if result.category.id == .trash {
+                    Button {
+                        if let trash = result.category.paths.first {
+                            NSWorkspace.shared.open(trash)
+                        }
+                    } label: {
+                        Label("Open Trash in Finder", systemImage: "folder")
                     }
-                } label: {
-                    if cleanupManager.isCleaning {
-                        Label("Moving...", systemImage: "hourglass")
-                    } else {
-                        Label("Move to Trash", systemImage: "trash")
+                    .buttonStyle(.bordered)
+                } else {
+                    Button {
+                        Task {
+                            await cleanupManager.clean(items: result.items)
+                        }
+                    } label: {
+                        if cleanupManager.isCleaning {
+                            Label("Moving...", systemImage: "hourglass")
+                        } else {
+                            Label("Move to Trash", systemImage: "trash")
+                        }
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
                 }
-                .buttonStyle(.bordered)
-                .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
             }
 
             Divider()
