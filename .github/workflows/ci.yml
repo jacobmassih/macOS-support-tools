@@ -53,6 +53,7 @@ jobs:
           echo "${{ runner.temp }}/diff-cover-venv/bin" >> "$GITHUB_PATH"
       
       - name: Build project
+        id: build_project
         run: |
           set -o pipefail
           xcodebuild clean build \
@@ -74,6 +75,7 @@ jobs:
             -scheme macos-support-tools \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath "${{ runner.temp }}/DerivedData" \
+            -resultBundlePath "${{ runner.temp }}/UnitTests.xcresult" \
             -only-testing:macos-support-toolsTests \
             -enableCodeCoverage YES \
             CODE_SIGN_IDENTITY="" \
@@ -107,12 +109,15 @@ jobs:
           exit "$status"
       
       - name: Run UI tests
+        if: ${{ !cancelled() && steps.build_project.outcome == 'success' }}
         run: |
           set -o pipefail
           xcodebuild test \
             -project macos-support-tools.xcodeproj \
             -scheme macos-support-tools \
             -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "${{ runner.temp }}/DerivedData" \
+            -resultBundlePath "${{ runner.temp }}/UITests.xcresult" \
             -only-testing:macos-support-toolsUITests \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -140,6 +145,7 @@ jobs:
         with:
           name: test-results-${{ github.event.pull_request.number }}
           path: |
-            ${{ runner.temp }}/DerivedData/**/Logs/Test/*.xcresult
+            ${{ runner.temp }}/UnitTests.xcresult
+            ${{ runner.temp }}/UITests.xcresult
           retention-days: 7
           if-no-files-found: ignore
