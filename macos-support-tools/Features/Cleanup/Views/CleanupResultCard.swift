@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CleanupResultCard: View {
     @Environment(CleanupManager.self) private var cleanupManager
+    @State private var pendingDeletion: [CleanupItem]?
     let result: CleanupScanResult
 
     var body: some View {
@@ -51,14 +52,24 @@ struct CleanupResultCard: View {
                 }
 
                 if result.category.id == .trash {
-                    Button {
-                        if let trash = result.category.paths.first {
-                            NSWorkspace.shared.open(trash)
-                        }
+                    Button(role: .destructive) {
+                        pendingDeletion = result.items
                     } label: {
-                        Label("Open Trash in Finder", systemImage: "folder")
+                        Label("Delete Permanently", systemImage: "trash")
                     }
                     .buttonStyle(.bordered)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
+                    .alert("Permanently delete items from Trash?", isPresented: Binding(
+                        get: { pendingDeletion != nil },
+                        set: { if !$0 { pendingDeletion = nil } }
+                    ), presenting: pendingDeletion) { items in
+                        Button("Delete Permanently", role: .destructive) {
+                            Task { await cleanupManager.deleteTrashItems(items) }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: { items in
+                        Text("This will permanently delete \(items.count) scanned item\(items.count == 1 ? "" : "s") and their contents. This cannot be undone.")
+                    }
                 } else {
                     Button {
                         Task {

@@ -90,6 +90,8 @@ struct CleanupRunResult: Codable {
     let trashedItems: [CleanupItem]
     let skippedItems: [CleanupSkippedItem]
 
+    var permanentlyDeleted: Bool? = nil
+
     var trashedBytes: Int64 {
         trashedItems.reduce(0) { $0 + $1.size }
     }

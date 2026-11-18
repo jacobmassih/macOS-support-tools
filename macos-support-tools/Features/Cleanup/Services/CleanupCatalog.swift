@@ -49,7 +49,7 @@ enum CleanupCatalog {
             CleanupCategory(
                 id: .trash,
                 title: "Trash",
-                subtitle: "Items already moved to Trash. Review before emptying in Finder.",
+                subtitle: "Items already moved to Trash. Review before permanently deleting.",
                 systemImage: "trash",
                 paths: [
                     homeDirectory.appending(path: ".Trash", directoryHint: .isDirectory)

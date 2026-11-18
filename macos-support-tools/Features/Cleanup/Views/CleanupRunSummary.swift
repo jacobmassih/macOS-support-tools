@@ -29,7 +29,8 @@ struct CleanupRunSummary: View {
     }
 
     private var summaryText: String {
-        let movedText = "\(result.trashedItems.count) item\(result.trashedItems.count == 1 ? "" : "s") moved to Trash"
+        let action = result.permanentlyDeleted == true ? "permanently deleted" : "moved to Trash"
+        let movedText = "\(result.trashedItems.count) item\(result.trashedItems.count == 1 ? "" : "s") \(action)"
         let sizeText = ByteCountFormatter.cleanupString(fromByteCount: result.trashedBytes)
 
         if result.skippedItems.isEmpty {

@@ -10,7 +10,7 @@ struct CleanupSettingsView: View {
     var body: some View {
         SettingsHeader(
             title: "Disk Cleanup",
-            subtitle: "Scan disk cleanup areas, review candidates, and move selected items to Trash."
+            subtitle: "Review cleanup candidates, move items to Trash, or permanently delete scanned Trash items."
         )
 
         SettingsCard {

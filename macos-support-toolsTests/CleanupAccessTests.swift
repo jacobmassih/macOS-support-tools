@@ -66,6 +66,30 @@ struct CleanupAccessTests {
         #expect(manager.incompleteCategories.map(\.id) == [.logs])
     }
 
+    @MainActor @Test func permanentlyDeletesOnlyConfirmedTrashChildren() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: UUID().uuidString)
+        let trash = root.appending(path: "Trash", directoryHint: .isDirectory)
+        try fm.createDirectory(at: trash, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let confirmed = trash.appending(path: "confirmed")
+        let retained = trash.appending(path: "retained")
+        let outside = root.appending(path: "outside")
+        for url in [confirmed, retained, outside] {
+            try Data(repeating: 1, count: 4096).write(to: url)
+        }
+        let manager = CleanupManager(categories: [category(.trash, paths: [trash])])
+        await manager.scan()
+        let scanned = try #require(manager.scanResults.first?.items.first { $0.url.lastPathComponent == "confirmed" })
+        let unscanned = CleanupItem(url: outside, size: 4096, modifiedDate: nil)
+        await manager.deleteTrashItems([scanned, unscanned])
+        #expect(!fm.fileExists(atPath: confirmed.path))
+        #expect(fm.fileExists(atPath: retained.path))
+        #expect(fm.fileExists(atPath: outside.path))
+        #expect(manager.lastCleanupResult?.permanentlyDeleted == true)
+        #expect(manager.scanResults.first?.itemCount == 1)
+    }
+
     private func category(_ id: CleanupCategoryID, paths: [URL]) -> CleanupCategory {
         CleanupCategory(id: id, title: id.rawValue, subtitle: "Fixture", systemImage: "folder", paths: paths, riskLevel: .review)
     }

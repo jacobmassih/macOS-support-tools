@@ -101,6 +101,20 @@ final class CleanupManager {
 
     @MainActor
     func clean(items: [CleanupItem]) async {
+        await runCleanup(items: items, trashRoot: nil)
+    }
+
+    @MainActor
+    func deleteTrashItems(_ items: [CleanupItem]) async {
+        guard let result = scanResults.first(where: { $0.category.id == .trash }),
+              let root = result.category.paths.first else { return }
+        let scanned = Set(result.items.map(\.url))
+        let confirmed = items.filter { scanned.contains($0.url) }
+        await runCleanup(items: confirmed, trashRoot: root)
+    }
+
+    @MainActor
+    private func runCleanup(items: [CleanupItem], trashRoot: URL?) async {
         guard !isScanning, !isCleaning else { return }
         guard !items.isEmpty else {
             lastCleanupResult = CleanupRunResult(trashedItems: [], skippedItems: [])
@@ -114,7 +128,7 @@ final class CleanupManager {
         let fileClient = fileClient
 
         let result = await Task.detached(priority: .userInitiated) {
-            Self.clean(items: itemsToClean, fileClient: fileClient)
+            Self.clean(items: itemsToClean, fileClient: fileClient, trashRoot: trashRoot)
         }.value
 
         lastCleanupResult = result
@@ -188,7 +202,8 @@ final class CleanupManager {
 
     nonisolated static func clean(
         items: [CleanupItem],
-        fileClient: CleanupFileClient = .live
+        fileClient: CleanupFileClient = .live,
+        trashRoot: URL? = nil
     ) -> CleanupRunResult {
         var trashedItems: [CleanupItem] = []
         var skippedItems: [CleanupSkippedItem] = []
@@ -205,14 +220,23 @@ final class CleanupManager {
             }
 
             do {
-                try fileClient.trashItem(item.url)
+                if let trashRoot {
+                    guard item.url.standardizedFileURL.deletingLastPathComponent().path == trashRoot.standardizedFileURL.path,
+                          try trashRoot.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false else {
+                        skippedItems.append(CleanupSkippedItem(item: item, reason: "Outside the scanned Trash folder."))
+                        continue
+                    }
+                    try FileManager.default.removeItem(at: item.url)
+                } else {
+                    try fileClient.trashItem(item.url)
+                }
                 trashedItems.append(item)
             } catch {
                 skippedItems.append(CleanupSkippedItem(item: item, reason: error.localizedDescription))
             }
         }
 
-        return CleanupRunResult(trashedItems: trashedItems, skippedItems: skippedItems)
+        return CleanupRunResult(trashedItems: trashedItems, skippedItems: skippedItems, permanentlyDeleted: trashRoot != nil)
     }
 
     @MainActor
