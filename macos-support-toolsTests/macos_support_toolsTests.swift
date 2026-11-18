@@ -969,6 +969,17 @@ struct macos_support_toolsTests {
         #expect(ScrollReversalPolicy.reversal(for: fractional) == nil)
     }
 
+    @Test func scrollReversalChecksEachActiveAxis() {
+        for (vertical, horizontal) in [(1.5, 0.0), (0.0, 1.5), (2.0, 1.5)] {
+            let event = makeScrollEventDescriptor(vertical: vertical, horizontal: horizontal)
+            #expect(ScrollReversalPolicy.reversal(for: event) == nil)
+        }
+        for (vertical, horizontal) in [(2.0, 0.0), (0.0, 2.0)] {
+            let event = makeScrollEventDescriptor(vertical: vertical, horizontal: horizontal)
+            #expect(ScrollReversalPolicy.reversal(for: event) != nil)
+        }
+    }
+
     @Test func scrollEventDescriptorReadsVerticalDeltaFromAxis1() throws {
         let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
 
