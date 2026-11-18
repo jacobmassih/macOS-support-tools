@@ -1,4 +1,5 @@
 import Foundation
+import CoreAudio
 import IOKit
 import IOKit.hid
 
@@ -26,6 +27,21 @@ final class HIDMouseDeviceMonitor {
 
         IOHIDManagerRegisterDeviceMatchingCallback(hidManager, deviceAddedCallback, context)
         IOHIDManagerRegisterDeviceRemovalCallback(hidManager, deviceRemovedCallback, context)
+
+        // Only subscribe to the two side buttons. HID usage numbers start at one.
+        let sideButtons = [4, 5].map { usage in
+            [kIOHIDElementUsagePageKey: kHIDPage_Button, kIOHIDElementUsageKey: usage]
+        }
+        IOHIDManagerSetInputValueMatchingMultiple(hidManager, sideButtons as CFArray)
+        IOHIDManagerRegisterInputValueCallback(hidManager, { context, result, _, value in
+            guard result == kIOReturnSuccess, let context, IOHIDValueGetIntegerValue(value) != 0 else { return }
+            let element = IOHIDValueGetElement(value)
+            guard let device = IOHIDElementGetDevice(element) else { return }
+            let manager = Unmanaged<MouseManager>.fromOpaque(context).takeUnretainedValue()
+            manager.recordSideButton(deviceID: device.deviceID,
+                                     button: Int64(IOHIDElementGetUsage(element)) - 1,
+                                     timestamp: AudioConvertHostTimeToNanos(IOHIDValueGetTimeStamp(value)))
+        }, context)
 
         IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerOpen(hidManager, IOOptionBits(kIOHIDOptionsTypeNone))

@@ -1655,6 +1655,23 @@ private final class RecordingMouseTaps: MouseEventTapControlling {
 }
 
 extension macos_support_toolsTests {
+    @MainActor @Test func simultaneousMiceKeepSeparateSideButtonActions() {
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = makeMouseManager(userDefaults: defaults)
+        manager.setDetectedDevices([makeMouseDevice(id: "A", button5Action: .forward),
+                                    makeMouseDevice(id: "B", button5Action: .back)])
+        manager.recordSideButton(deviceID: "A", button: 3, timestamp: 100)
+        manager.recordSideButton(deviceID: "B", button: 3, timestamp: 101)
+        #expect(manager.deviceForPress(button: 3, timestamp: 101)?.button5Action == .back)
+        #expect(manager.deviceForPress(button: 3, timestamp: 100)?.button5Action == .forward)
+        #expect(manager.deviceForPress(button: 3, timestamp: 101) == nil)
+        manager.recordSideButton(deviceID: "A", button: 4, timestamp: 102)
+        manager.recordSideButton(deviceID: "B", button: 4, timestamp: 102)
+        #expect(manager.deviceForPress(button: 4, timestamp: 102) == nil)
+    }
+
     @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
         let suite = "ConditionalMouseTaps-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
