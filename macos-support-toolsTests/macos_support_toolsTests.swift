@@ -6,6 +6,110 @@ import Testing
 @testable import macos_support_tools
 
 struct macos_support_toolsTests {
+    @Test func musicLaunchInterceptorRedirectsAppleMusicWhenEnabledAndSpotifyInstalled() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .redirectToSpotify)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresLaunchesWhenDisabled() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: false,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresNonMusicLaunches() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: "com.apple.Safari",
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorLeavesMusicAloneWhenSpotifyMissing() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: MediaBundleID.appleMusic,
+            isEnabled: true,
+            isSpotifyInstalled: false
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorIgnoresMissingBundleIdentifier() {
+        let action = MusicLaunchInterceptorCore.action(
+            forLaunchedBundleID: nil,
+            isEnabled: true,
+            isSpotifyInstalled: true
+        )
+
+        #expect(action == .ignore)
+    }
+
+    @Test func musicLaunchInterceptorDefaultsToDisabledAndPersistsEnabledState() throws {
+        let suiteName = "MusicLaunchInterceptorPersistenceTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let interceptor = MusicLaunchInterceptor(userDefaults: userDefaults)
+        #expect(!interceptor.isEnabled)
+
+        interceptor.isEnabled = true
+        #expect(userDefaults.bool(forKey: MusicLaunchInterceptor.DefaultsKey.isEnabled))
+
+        let reloaded = MusicLaunchInterceptor(userDefaults: userDefaults)
+        #expect(reloaded.isEnabled)
+    }
+
+
+    @MainActor @Test func musicWaitsForSuccessfulSpotifyLaunchBeforeQuitting() throws {
+        let suite = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let center = NotificationCenter()
+        var url: URL? = URL(filePath: "/fixture/Spotify.app")
+        var completion: ((Bool) -> Void)?
+        var quits = 0
+        let interceptor = MusicLaunchInterceptor(userDefaults: defaults, center: center,
+            spotifyURL: { url }, openSpotify: { _, callback in completion = callback })
+        interceptor.isEnabled = true
+        center.post(name: NSWorkspace.didLaunchApplicationNotification, object: nil)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        #expect(completion != nil)
+        completion?(false)
+        #expect(quits == 0)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        completion?(true)
+        #expect(quits == 1)
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        interceptor.isEnabled = false
+        completion?(true)
+        #expect(quits == 1)
+        interceptor.isEnabled = true
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        interceptor.isEnabled = false
+        interceptor.isEnabled = true
+        completion?(true)
+        #expect(quits == 1)
+        url = nil
+        completion = nil
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        #expect(completion == nil)
+        #expect(!interceptor.isSpotifyInstalled)
+    }
+
     @Test func appVersionInfoReadsBundleMetadata() {
         #expect(!AppVersionInfo.version.isEmpty)
     }

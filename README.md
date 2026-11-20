@@ -9,6 +9,7 @@ It is built for a simple use case: make external mouse scrolling and side-button
 - Reverses external mouse wheel scrolling while avoiding trackpad momentum scrolling
 - Remaps side mouse buttons to back, forward, or middle click behavior
 - Temporarily skips custom side-button handling when Citrix Workspace is the frontmost app
+- Optionally opens Spotify whenever Apple Music launches, including when you open Music yourself. Music closes after Spotify opens successfully.
 - Supports launch at login
 - Shows a Dock icon while the Settings window is open (including when minimized)
 - Returns to menu-bar-only mode when Settings is closed; input features keep running
