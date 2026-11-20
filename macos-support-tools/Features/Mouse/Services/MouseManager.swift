@@ -1,5 +1,6 @@
 import Foundation
 import IOKit.hid
+import CoreAudio
 import CoreGraphics
 import AppKit
 import Observation
@@ -104,9 +105,10 @@ import Observation
     }
 
     private var needsButtonEventTap: Bool {
-        guard mouseButtonsEnabled, let device = getCurrentActiveDevice() else { return false }
-        return (device.button4Enabled && device.button4Action != .none)
-            || (device.button5Enabled && device.button5Action != .none)
+        mouseButtonsEnabled && connectedDevices.contains { device in
+            (device.button4Enabled && device.button4Action != .none)
+                || (device.button5Enabled && device.button5Action != .none)
+        }
     }
 
     private func updateMouseEventTaps() {
@@ -188,6 +190,7 @@ import Observation
     }
 
     internal func removeDevice(withID id: String) {
+        recentPresses.removeAll { $0.deviceID == id }
         connectedDevices.removeAll { $0.id == id }
     }
 
@@ -196,8 +199,32 @@ import Observation
         devices.forEach(addDevice)
     }
     
-    internal func getCurrentActiveDevice() -> MouseDevice? {
-        connectedDevices.first
+    private struct SideButtonPress {
+        let deviceID: String
+        let button: Int64
+        let timestamp: UInt64
+    }
+
+    @ObservationIgnored private var recentPresses: [SideButtonPress] = []
+
+    func recordSideButton(deviceID: String, usage: UInt32, value: Int, hostTime: UInt64) {
+        guard value != 0, (4...5).contains(usage) else { return }
+        // HID uses one-based button usages and host ticks. Quartz uses zero-based
+        // button numbers and nanoseconds.
+        let button = Int64(usage) - 1
+        let timestamp = AudioConvertHostTimeToNanos(hostTime)
+        if recentPresses.count >= 32 { recentPresses.removeFirst() }
+        recentPresses.append(SideButtonPress(deviceID: deviceID, button: button, timestamp: timestamp))
+    }
+
+    func deviceForPress(button: Int64, timestamp: UInt64) -> MouseDevice? {
+        let matches = recentPresses.filter { $0.timestamp == timestamp && $0.button == button }
+        recentPresses.removeAll { $0.timestamp == timestamp && $0.button == button }
+        if let first = matches.first {
+            guard matches.allSatisfy({ $0.deviceID == first.deviceID }) else { return nil }
+            return connectedDevices.first { $0.id == first.deviceID }
+        }
+        return connectedDevices.count == 1 ? connectedDevices.first : nil
     }
 
     internal func shouldReverseScroll() -> Bool {

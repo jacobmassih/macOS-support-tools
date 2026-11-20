@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import CoreAudio
 import IOKit.hid
 import Testing
 @testable import macos_support_tools
@@ -1655,6 +1656,68 @@ private final class RecordingMouseTaps: MouseEventTapControlling {
 }
 
 extension macos_support_toolsTests {
+    @MainActor @Test func simultaneousMiceKeepSeparateSideButtonActions() throws {
+        let suite = UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = makeMouseManager(userDefaults: defaults)
+        manager.citrixPassthroughEnabled = false
+        manager.setDetectedDevices([
+            makeMouseDevice(id: "A", button4Enabled: false, button5Action: .forward),
+            makeMouseDevice(id: "B", button4Action: .middleClick, button5Action: .back)
+        ])
+        func verifySideButton(
+            _ button: Int64,
+            hostTime: UInt64,
+            type: CGEventType = .otherMouseDown,
+            action expectedAction: MouseButtonAction?
+        ) throws {
+            let event = try #require(CGEvent(
+                mouseEventSource: nil,
+                mouseType: type,
+                mouseCursorPosition: .zero,
+                mouseButton: .center
+            ))
+            event.setIntegerValueField(.mouseEventButtonNumber, value: button)
+            event.timestamp = AudioConvertHostTimeToNanos(hostTime)
+            let context = Unmanaged.passUnretained(manager).toOpaque()
+            var performedAction: MouseButtonAction?
+            let result = handleButtonEvent(type: type, event: event, refcon: context) { _, action in
+                performedAction = action
+                return nil
+            }
+            if performedAction == nil {
+                #expect(result?.takeUnretainedValue() === event)
+            } else {
+                #expect(result == nil)
+            }
+            let actionMatches = performedAction == expectedAction
+            #expect(actionMatches, "Unexpected action for Quartz button \(button) at host time \(hostTime)")
+        }
+
+        manager.recordSideButton(deviceID: "A", usage: 4, value: 1, hostTime: 100)
+        manager.recordSideButton(deviceID: "B", usage: 4, value: 1, hostTime: 101)
+        try verifySideButton(3, hostTime: 101, action: .back)
+        try verifySideButton(3, hostTime: 100, type: .otherMouseUp, action: nil)
+        try verifySideButton(3, hostTime: 100, action: .forward)
+        try verifySideButton(3, hostTime: 101, action: nil)
+
+        manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 102)
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 103)
+        try verifySideButton(4, hostTime: 102, action: nil)
+        try verifySideButton(4, hostTime: 103, action: .middleClick)
+
+        manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 104)
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 104)
+        try verifySideButton(4, hostTime: 104, action: nil)
+
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 0, hostTime: 105)
+        try verifySideButton(4, hostTime: 105, action: nil)
+
+        manager.removeDevice(withID: "A")
+        try verifySideButton(3, hostTime: 106, action: .back)
+    }
+
     @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
         let suite = "ConditionalMouseTaps-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

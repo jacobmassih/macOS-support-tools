@@ -27,7 +27,26 @@ final class HIDMouseDeviceMonitor {
         IOHIDManagerRegisterDeviceMatchingCallback(hidManager, deviceAddedCallback, context)
         IOHIDManagerRegisterDeviceRemovalCallback(hidManager, deviceRemovedCallback, context)
 
-        IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        // Only subscribe to the two side buttons. HID usage numbers start at one.
+        let sideButtons = [4, 5].map { usage in
+            [kIOHIDElementUsagePageKey: kHIDPage_Button, kIOHIDElementUsageKey: usage]
+        }
+        IOHIDManagerSetInputValueMatchingMultiple(hidManager, sideButtons as CFArray)
+        IOHIDManagerRegisterInputValueCallback(hidManager, { context, result, _, value in
+            guard result == kIOReturnSuccess, let context else { return }
+            let element = IOHIDValueGetElement(value)
+            let device = IOHIDElementGetDevice(element)
+            let manager = Unmanaged<MouseManager>.fromOpaque(context).takeUnretainedValue()
+            manager.recordSideButton(
+                deviceID: device.deviceID,
+                usage: IOHIDElementGetUsage(element),
+                value: IOHIDValueGetIntegerValue(value),
+                hostTime: IOHIDValueGetTimeStamp(value)
+            )
+        }, context)
+
+        // Match the Quartz tap so HID reports still arrive in menu and modal loops.
+        IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), CFRunLoopMode.commonModes.rawValue)
         IOHIDManagerOpen(hidManager, IOOptionBits(kIOHIDOptionsTypeNone))
         detectInitialDevices()
     }
@@ -35,7 +54,7 @@ final class HIDMouseDeviceMonitor {
     func stop() {
         guard let hidManager else { return }
 
-        IOHIDManagerUnscheduleFromRunLoop(hidManager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDManagerUnscheduleFromRunLoop(hidManager, CFRunLoopGetCurrent(), CFRunLoopMode.commonModes.rawValue)
         IOHIDManagerClose(hidManager, IOOptionBits(kIOHIDOptionsTypeNone))
         self.hidManager = nil
     }

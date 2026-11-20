@@ -91,7 +91,16 @@ func buttonEventCallback(
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-        guard let refcon = refcon else {
+    handleButtonEvent(type: type, event: event, refcon: refcon, performAction: handleButtonAction)
+}
+
+func handleButtonEvent(
+    type: CGEventType,
+    event: CGEvent,
+    refcon: UnsafeMutableRawPointer?,
+    performAction: (CGEvent, MouseButtonAction) -> Unmanaged<CGEvent>?
+) -> Unmanaged<CGEvent>? {
+    guard let refcon else {
         return Unmanaged.passUnretained(event)
     }
     
@@ -112,26 +121,21 @@ func buttonEventCallback(
     }
     
     
-    // Check if the event is from a side button (Button 4 or Button 5)
     let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
     
-    switch buttonNumber {
-    case 4:
-        // Button 4 (Forward) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button4Enabled {
-            let action = device.button4Action
-            return handleButtonAction(event: event, action: action)
-        }
-    case 3:
-        // Button 5 (Back) - check if we should override the action
-        if let device = manager.getCurrentActiveDevice(), device.button5Enabled {
-            let action = device.button5Action
-            return handleButtonAction(event: event, action: action)
-        }
-    default:
-        break
+    guard type == .otherMouseDown, buttonNumber == 3 || buttonNumber == 4,
+          let device = manager.deviceForPress(button: buttonNumber, timestamp: event.timestamp) else {
+        return Unmanaged.passUnretained(event)
     }
-    
+
+    // Preserve the persisted button names: Quartz 3 is the rear (Back) button,
+    // historically stored as button5; Quartz 4 is the forward button, stored as button4.
+    if buttonNumber == 3 && device.button5Enabled {
+        return performAction(event, device.button5Action)
+    }
+    if buttonNumber == 4 && device.button4Enabled {
+        return performAction(event, device.button4Action)
+    }
     return Unmanaged.passUnretained(event)
 }
 
