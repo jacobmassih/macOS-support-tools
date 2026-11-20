@@ -6,7 +6,7 @@ struct MediaSettingsView: View {
     var body: some View {
         SettingsHeader(
             title: "Media",
-            subtitle: "Redirect Apple Music launches triggered by media keys or Bluetooth earphones to Spotify."
+            subtitle: "Open Spotify whenever Apple Music launches, including when you open Music yourself."
         )
 
         SettingsCard {
