@@ -106,25 +106,43 @@ final class CleanupManager {
 
     @MainActor
     func deleteTrashItems(_ items: [CleanupItem]) async {
+        guard !isScanning, !isCleaning else { return }
         guard let result = scanResults.first(where: { $0.category.id == .trash }),
-              let root = result.category.paths.first else { return }
-        let scanned = Dictionary(grouping: result.items, by: \.url)
-        let confirmed = items.filter { item in
-            scanned[item.url]?.contains { $0.trashIdentity == item.trashIdentity } == true
+              let root = result.category.paths.first else {
+            lastError = "Run a Trash scan before permanently deleting items."
+            return
         }
-        await runCleanup(items: confirmed, trashRoot: root)
+        let scanned = Dictionary(grouping: result.items, by: \.url)
+        var confirmed: [CleanupItem] = []
+        var skipped: [CleanupSkippedItem] = []
+        for item in items {
+            if scanned[item.url]?.contains(where: { $0.trashIdentity == item.trashIdentity }) == true {
+                confirmed.append(item)
+            } else {
+                skipped.append(CleanupSkippedItem(item: item, reason: "Item is no longer in the current Trash scan. Review the latest results."))
+            }
+        }
+        await runCleanup(items: confirmed, trashRoot: root, skippedBeforeCleanup: skipped)
     }
 
     @MainActor
-    private func runCleanup(items: [CleanupItem], trashRoot: URL?) async {
+    private func runCleanup(
+        items: [CleanupItem],
+        trashRoot: URL?,
+        skippedBeforeCleanup: [CleanupSkippedItem] = []
+    ) async {
         guard !isScanning, !isCleaning else { return }
+        lastError = nil
         guard !items.isEmpty else {
-            lastCleanupResult = CleanupRunResult(trashedItems: [], skippedItems: [])
+            lastCleanupResult = CleanupRunResult(
+                trashedItems: [],
+                skippedItems: skippedBeforeCleanup,
+                permanentlyDeleted: trashRoot != nil
+            )
             return
         }
 
         isCleaning = true
-        lastError = nil
 
         let itemsToClean = items
         let fileClient = fileClient
@@ -133,7 +151,11 @@ final class CleanupManager {
             Self.clean(items: itemsToClean, fileClient: fileClient, trashRoot: trashRoot)
         }.value
 
-        lastCleanupResult = result
+        lastCleanupResult = CleanupRunResult(
+            trashedItems: result.trashedItems,
+            skippedItems: skippedBeforeCleanup + result.skippedItems,
+            permanentlyDeleted: result.permanentlyDeleted
+        )
 
         if result.didTrashAnyItems {
             removeTrashedItemsFromScanResults(result.trashedItems)
@@ -173,8 +195,9 @@ final class CleanupManager {
                     items.append(try cleanupItem(at: path))
                 } else {
                     items.append(contentsOf: try fileClient.contentsOfDirectory(path).map { url in
+                        let trashIdentity = category.id == .trash ? TrashFileIdentity(at: url) : nil
                         var item = try cleanupItem(at: url)
-                        if category.id == .trash { item.trashIdentity = TrashFileIdentity(at: url) }
+                        item.trashIdentity = trashIdentity
                         return item
                     })
                 }

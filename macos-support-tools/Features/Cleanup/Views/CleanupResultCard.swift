@@ -68,7 +68,7 @@ struct CleanupResultCard: View {
                         }
                         Button("Cancel", role: .cancel) {}
                     } message: { items in
-                        Text("This will permanently delete \(items.count) scanned item\(items.count == 1 ? "" : "s") and their contents. This cannot be undone.")
+                        Text("This will permanently delete all \(items.count) listed Trash item\(items.count == 1 ? "" : "s") and their contents. This cannot be undone.")
                     }
                 } else {
                     Button {
@@ -154,7 +154,7 @@ private struct CleanupPreviewDetails: View {
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(result.items.prefix(candidatePreviewLimit)) { item in
+                        ForEach(previewItems) { item in
                             CleanupCandidateRow(item: item)
                         }
 
@@ -206,8 +206,12 @@ private struct CleanupPreviewDetails: View {
         }
     }
 
+    private var previewItems: ArraySlice<CleanupItem> {
+        result.category.id == .trash ? result.items[...] : result.items.prefix(candidatePreviewLimit)
+    }
+
     private var remainingCandidateCount: Int {
-        max(result.items.count - candidatePreviewLimit, 0)
+        result.items.count - previewItems.count
     }
 
     private var largestItemText: String {

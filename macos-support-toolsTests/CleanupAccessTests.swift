@@ -95,7 +95,33 @@ struct CleanupAccessTests {
         #expect(fm.fileExists(atPath: retained.path))
         #expect(fm.fileExists(atPath: outside.path))
         #expect(manager.lastCleanupResult?.permanentlyDeleted == true)
+        #expect(manager.lastCleanupResult?.skippedItems.map(\.id) == [unscanned.id])
         #expect(manager.scanResults.first?.itemCount == 1)
+    }
+
+    @MainActor @Test func staleConfirmationReportsSkippedTrashItems() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: UUID().uuidString)
+        let trash = root.appending(path: "Trash", directoryHint: .isDirectory)
+        try fm.createDirectory(at: trash, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let candidate = trash.appending(path: "candidate")
+        try Data(repeating: 1, count: 4096).write(to: candidate)
+
+        let manager = CleanupManager(categories: [category(.trash, paths: [trash])])
+        await manager.scan()
+        let confirmed = try #require(manager.scanResults.first?.items.first)
+        try fm.moveItem(at: candidate, to: root.appending(path: "restored"))
+        let replacement = Data(repeating: 2, count: 4096)
+        try replacement.write(to: candidate)
+        await manager.scan()
+
+        await manager.deleteTrashItems([confirmed])
+        let result = try #require(manager.lastCleanupResult)
+        #expect(result.permanentlyDeleted == true)
+        #expect(result.trashedItems.isEmpty)
+        #expect(result.skippedItems.map(\.id) == [confirmed.id])
+        #expect(try Data(contentsOf: candidate) == replacement)
     }
 
     private func category(_ id: CleanupCategoryID, paths: [URL]) -> CleanupCategory {
