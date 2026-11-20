@@ -33,12 +33,31 @@ struct CleanupCategory: Identifiable, Codable {
     let riskLevel: CleanupRiskLevel
 }
 
+struct TrashFileIdentity: Codable, Equatable {
+    let device: dev_t
+    let inode: ino_t
+    let generation: UInt32
+    let birthSeconds: Int
+    let birthNanoseconds: Int
+
+    nonisolated init?(at url: URL) {
+        var info = stat()
+        guard url.withUnsafeFileSystemRepresentation({ lstat($0, &info) }) == 0 else { return nil }
+        device = info.st_dev
+        inode = info.st_ino
+        generation = info.st_gen
+        birthSeconds = info.st_birthtimespec.tv_sec
+        birthNanoseconds = info.st_birthtimespec.tv_nsec
+    }
+}
+
 struct CleanupItem: Identifiable, Codable {
     var id: URL { url }
 
     let url: URL
     let size: Int64
     let modifiedDate: Date?
+    var trashIdentity: TrashFileIdentity? = nil
     var isDirectory = false
 
     var systemImage: String {

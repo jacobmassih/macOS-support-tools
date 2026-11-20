@@ -108,8 +108,10 @@ final class CleanupManager {
     func deleteTrashItems(_ items: [CleanupItem]) async {
         guard let result = scanResults.first(where: { $0.category.id == .trash }),
               let root = result.category.paths.first else { return }
-        let scanned = Set(result.items.map(\.url))
-        let confirmed = items.filter { scanned.contains($0.url) }
+        let scanned = Dictionary(grouping: result.items, by: \.url)
+        let confirmed = items.filter { item in
+            scanned[item.url]?.contains { $0.trashIdentity == item.trashIdentity } == true
+        }
         await runCleanup(items: confirmed, trashRoot: root)
     }
 
@@ -170,7 +172,11 @@ final class CleanupManager {
                    values.isDirectory == false {
                     items.append(try cleanupItem(at: path))
                 } else {
-                    items.append(contentsOf: try fileClient.contentsOfDirectory(path).map(cleanupItem(at:)))
+                    items.append(contentsOf: try fileClient.contentsOfDirectory(path).map { url in
+                        var item = try cleanupItem(at: url)
+                        if category.id == .trash { item.trashIdentity = TrashFileIdentity(at: url) }
+                        return item
+                    })
                 }
             } catch is CancellationError {
                 throw CancellationError()
@@ -224,6 +230,10 @@ final class CleanupManager {
                     guard item.url.standardizedFileURL.deletingLastPathComponent().path == trashRoot.standardizedFileURL.path,
                           try trashRoot.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false else {
                         skippedItems.append(CleanupSkippedItem(item: item, reason: "Outside the scanned Trash folder."))
+                        continue
+                    }
+                    guard let identity = item.trashIdentity, identity == TrashFileIdentity(at: item.url) else {
+                        skippedItems.append(CleanupSkippedItem(item: item, reason: "Item identity changed or could not be verified. Scan again."))
                         continue
                     }
                     try FileManager.default.removeItem(at: item.url)
