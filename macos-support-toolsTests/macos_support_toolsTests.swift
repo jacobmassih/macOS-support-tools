@@ -1666,11 +1666,12 @@ extension macos_support_toolsTests {
             makeMouseDevice(id: "A", button4Enabled: false, button5Action: .forward),
             makeMouseDevice(id: "B", button4Action: .middleClick, button5Action: .back)
         ])
-        func actionForSideButton(
+        func verifySideButton(
             _ button: Int64,
             hostTime: UInt64,
-            type: CGEventType = .otherMouseDown
-        ) throws -> MouseButtonAction? {
+            type: CGEventType = .otherMouseDown,
+            action expectedAction: MouseButtonAction?
+        ) throws {
             let event = try #require(CGEvent(
                 mouseEventSource: nil,
                 mouseType: type,
@@ -1690,30 +1691,31 @@ extension macos_support_toolsTests {
             } else {
                 #expect(result == nil)
             }
-            return performedAction
+            let actionMatches = performedAction == expectedAction
+            #expect(actionMatches, "Unexpected action for Quartz button \(button) at host time \(hostTime)")
         }
 
         manager.recordSideButton(deviceID: "A", usage: 4, value: 1, hostTime: 100)
         manager.recordSideButton(deviceID: "B", usage: 4, value: 1, hostTime: 101)
-        #expect(try actionForSideButton(3, hostTime: 101) == .back)
-        #expect(try actionForSideButton(3, hostTime: 100, type: .otherMouseUp) == nil)
-        #expect(try actionForSideButton(3, hostTime: 100) == .forward)
-        #expect(try actionForSideButton(3, hostTime: 101) == nil)
+        try verifySideButton(3, hostTime: 101, action: .back)
+        try verifySideButton(3, hostTime: 100, type: .otherMouseUp, action: nil)
+        try verifySideButton(3, hostTime: 100, action: .forward)
+        try verifySideButton(3, hostTime: 101, action: nil)
 
         manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 102)
         manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 103)
-        #expect(try actionForSideButton(4, hostTime: 102) == nil)
-        #expect(try actionForSideButton(4, hostTime: 103) == .middleClick)
+        try verifySideButton(4, hostTime: 102, action: nil)
+        try verifySideButton(4, hostTime: 103, action: .middleClick)
 
         manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 104)
         manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 104)
-        #expect(try actionForSideButton(4, hostTime: 104) == nil)
+        try verifySideButton(4, hostTime: 104, action: nil)
 
         manager.recordSideButton(deviceID: "B", usage: 5, value: 0, hostTime: 105)
-        #expect(try actionForSideButton(4, hostTime: 105) == nil)
+        try verifySideButton(4, hostTime: 105, action: nil)
 
         manager.removeDevice(withID: "A")
-        #expect(try actionForSideButton(3, hostTime: 106) == .back)
+        try verifySideButton(3, hostTime: 106, action: .back)
     }
 
     @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
