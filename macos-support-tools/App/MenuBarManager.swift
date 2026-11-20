@@ -6,10 +6,9 @@ struct MenuBarManager: View {
     @Environment(MouseManager.self) var mouseManager: MouseManager
     @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
     @Environment(\.openWindow) private var openWindow
-    @Environment(MusicLaunchInterceptor.self) private var musicLaunchInterceptor: MusicLaunchInterceptor
+    @Environment(MusicLaunchInterceptor.self) private var musicLaunchInterceptor: MusicLaunchInterceptor?
 
     var body: some View {
-        @Bindable var musicLaunchInterceptor = musicLaunchInterceptor
         @Bindable var keyboardManager = keyboardManager
         @Bindable var mouseManager = mouseManager
 
@@ -20,7 +19,10 @@ struct MenuBarManager: View {
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
             Toggle("Block Keyboard", isOn: $keyboardManager.keyboardBlocked)
                 .disabled(!accessibilityManager.isAccessibilityEnabled)
-            Toggle("Music to Spotify", isOn: $musicLaunchInterceptor.isEnabled)
+            if let musicLaunchInterceptor {
+                @Bindable var musicLaunchInterceptor = musicLaunchInterceptor
+                Toggle("Music to Spotify", isOn: $musicLaunchInterceptor.isEnabled)
+            }
 
             Divider().padding(.vertical, 2)
 
