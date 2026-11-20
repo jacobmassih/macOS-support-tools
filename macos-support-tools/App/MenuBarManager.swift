@@ -4,14 +4,14 @@ struct MenuBarManager: View {
     @Environment(AccessibilityManager.self) var accessibilityManager: AccessibilityManager
     @Environment(KeyboardManager.self) var keyboardManager: KeyboardManager
     @Environment(MouseManager.self) var mouseManager: MouseManager
-    @Environment(MusicLaunchInterceptor.self) var musicLaunchInterceptor: MusicLaunchInterceptor
     @Environment(LaunchAtLogin.self) private var launchAtLogin: LaunchAtLogin
     @Environment(\.openWindow) private var openWindow
+    @Environment(MusicLaunchInterceptor.self) private var musicLaunchInterceptor: MusicLaunchInterceptor
 
     var body: some View {
+        @Bindable var musicLaunchInterceptor = musicLaunchInterceptor
         @Bindable var keyboardManager = keyboardManager
         @Bindable var mouseManager = mouseManager
-        @Bindable var musicLaunchInterceptor = musicLaunchInterceptor
 
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Natural Scroll", isOn: $mouseManager.naturalScrollEnabled)
@@ -59,7 +59,7 @@ struct StatusBarManager_Previews: PreviewProvider {
             .environment(accessibilityManager)
             .environment(KeyboardManager(accessibilityManager: accessibilityManager))
             .environment(MouseManager(accessibilityManager: accessibilityManager))
-            .environment(MusicLaunchInterceptor())
             .environment(LaunchAtLogin())
+            .environment(MusicLaunchInterceptor())
     }
 }

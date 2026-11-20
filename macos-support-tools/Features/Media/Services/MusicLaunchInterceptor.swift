@@ -113,10 +113,10 @@ import Observation
             forLaunchedBundleID: bundleID,
             isEnabled: isEnabled,
             isSpotifyInstalled: isSpotifyInstalled
-        ) == .redirectToSpotify, let url else { return }
+        ) == .redirectToSpotify, let url, let launchObserver = observer else { return }
 
         openSpotify(url) { [weak self] opened in
-            if opened && self?.isEnabled == true {
+            if opened && self?.observer === launchObserver {
                 terminateMusic()
             }
         }

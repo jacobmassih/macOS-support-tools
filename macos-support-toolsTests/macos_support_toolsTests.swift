@@ -97,9 +97,14 @@ struct macos_support_toolsTests {
         interceptor.isEnabled = false
         completion?(true)
         #expect(quits == 1)
+        interceptor.isEnabled = true
+        interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
+        interceptor.isEnabled = false
+        interceptor.isEnabled = true
+        completion?(true)
+        #expect(quits == 1)
         url = nil
         completion = nil
-        interceptor.isEnabled = true
         interceptor.handleLaunch(bundleID: MediaBundleID.appleMusic) { quits += 1 }
         #expect(completion == nil)
         #expect(!interceptor.isSpotifyInstalled)
