@@ -1,5 +1,6 @@
 import Foundation
 import IOKit.hid
+import CoreAudio
 import CoreGraphics
 import AppKit
 import Observation
@@ -206,7 +207,12 @@ import Observation
 
     @ObservationIgnored private var recentPresses: [SideButtonPress] = []
 
-    func recordSideButton(deviceID: String, button: Int64, timestamp: UInt64) {
+    func recordSideButton(deviceID: String, usage: UInt32, value: Int, hostTime: UInt64) {
+        guard value != 0, (4...5).contains(usage) else { return }
+        // HID uses one-based button usages and host ticks. Quartz uses zero-based
+        // button numbers and nanoseconds.
+        let button = Int64(usage) - 1
+        let timestamp = AudioConvertHostTimeToNanos(hostTime)
         if recentPresses.count >= 32 { recentPresses.removeFirst() }
         recentPresses.append(SideButtonPress(deviceID: deviceID, button: button, timestamp: timestamp))
     }

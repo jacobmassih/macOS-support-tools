@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import CoreAudio
 import IOKit.hid
 import Testing
 @testable import macos_support_tools
@@ -1655,21 +1656,64 @@ private final class RecordingMouseTaps: MouseEventTapControlling {
 }
 
 extension macos_support_toolsTests {
-    @MainActor @Test func simultaneousMiceKeepSeparateSideButtonActions() {
+    @MainActor @Test func simultaneousMiceKeepSeparateSideButtonActions() throws {
         let suite = UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let manager = makeMouseManager(userDefaults: defaults)
-        manager.setDetectedDevices([makeMouseDevice(id: "A", button5Action: .forward),
-                                    makeMouseDevice(id: "B", button5Action: .back)])
-        manager.recordSideButton(deviceID: "A", button: 3, timestamp: 100)
-        manager.recordSideButton(deviceID: "B", button: 3, timestamp: 101)
-        #expect(manager.deviceForPress(button: 3, timestamp: 101)?.button5Action == .back)
-        #expect(manager.deviceForPress(button: 3, timestamp: 100)?.button5Action == .forward)
-        #expect(manager.deviceForPress(button: 3, timestamp: 101) == nil)
-        manager.recordSideButton(deviceID: "A", button: 4, timestamp: 102)
-        manager.recordSideButton(deviceID: "B", button: 4, timestamp: 102)
-        #expect(manager.deviceForPress(button: 4, timestamp: 102) == nil)
+        manager.citrixPassthroughEnabled = false
+        manager.setDetectedDevices([
+            makeMouseDevice(id: "A", button4Enabled: false, button5Action: .forward),
+            makeMouseDevice(id: "B", button4Action: .middleClick, button5Action: .back)
+        ])
+        func actionForSideButton(
+            _ button: Int64,
+            hostTime: UInt64,
+            type: CGEventType = .otherMouseDown
+        ) throws -> MouseButtonAction? {
+            let event = try #require(CGEvent(
+                mouseEventSource: nil,
+                mouseType: type,
+                mouseCursorPosition: .zero,
+                mouseButton: .center
+            ))
+            event.setIntegerValueField(.mouseEventButtonNumber, value: button)
+            event.timestamp = AudioConvertHostTimeToNanos(hostTime)
+            let context = Unmanaged.passUnretained(manager).toOpaque()
+            var performedAction: MouseButtonAction?
+            let result = handleButtonEvent(type: type, event: event, refcon: context) { _, action in
+                performedAction = action
+                return nil
+            }
+            if performedAction == nil {
+                #expect(result?.takeUnretainedValue() === event)
+            } else {
+                #expect(result == nil)
+            }
+            return performedAction
+        }
+
+        manager.recordSideButton(deviceID: "A", usage: 4, value: 1, hostTime: 100)
+        manager.recordSideButton(deviceID: "B", usage: 4, value: 1, hostTime: 101)
+        #expect(try actionForSideButton(3, hostTime: 101) == .back)
+        #expect(try actionForSideButton(3, hostTime: 100, type: .otherMouseUp) == nil)
+        #expect(try actionForSideButton(3, hostTime: 100) == .forward)
+        #expect(try actionForSideButton(3, hostTime: 101) == nil)
+
+        manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 102)
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 103)
+        #expect(try actionForSideButton(4, hostTime: 102) == nil)
+        #expect(try actionForSideButton(4, hostTime: 103) == .middleClick)
+
+        manager.recordSideButton(deviceID: "A", usage: 5, value: 1, hostTime: 104)
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 1, hostTime: 104)
+        #expect(try actionForSideButton(4, hostTime: 104) == nil)
+
+        manager.recordSideButton(deviceID: "B", usage: 5, value: 0, hostTime: 105)
+        #expect(try actionForSideButton(4, hostTime: 105) == nil)
+
+        manager.removeDevice(withID: "A")
+        #expect(try actionForSideButton(3, hostTime: 106) == .back)
     }
 
     @MainActor @Test func mouseTapsFollowDeviceSettingsAndPermissionLifecycle() {
