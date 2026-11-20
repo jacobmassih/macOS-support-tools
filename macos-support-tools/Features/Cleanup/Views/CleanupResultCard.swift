@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CleanupResultCard: View {
     @Environment(CleanupManager.self) private var cleanupManager
+    @State private var pendingDeletion: [CleanupItem]?
     let result: CleanupScanResult
 
     var body: some View {
@@ -50,19 +51,40 @@ struct CleanupResultCard: View {
                     }
                 }
 
-                Button {
-                    Task {
-                        await cleanupManager.clean(items: result.items)
+                if result.category.id == .trash {
+                    Button(role: .destructive) {
+                        pendingDeletion = result.items
+                    } label: {
+                        Label("Delete Permanently", systemImage: "trash")
                     }
-                } label: {
-                    if cleanupManager.isCleaning {
-                        Label("Moving...", systemImage: "hourglass")
-                    } else {
-                        Label("Move to Trash", systemImage: "trash")
+                    .buttonStyle(.bordered)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
+                    .alert("Permanently delete items from Trash?", isPresented: Binding(
+                        get: { pendingDeletion != nil },
+                        set: { if !$0 { pendingDeletion = nil } }
+                    ), presenting: pendingDeletion) { items in
+                        Button("Delete Permanently", role: .destructive) {
+                            Task { await cleanupManager.deleteTrashItems(items) }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: { items in
+                        Text("This will permanently delete all \(items.count) listed Trash item\(items.count == 1 ? "" : "s") and their contents. This cannot be undone.")
                     }
+                } else {
+                    Button {
+                        Task {
+                            await cleanupManager.clean(items: result.items)
+                        }
+                    } label: {
+                        if cleanupManager.isCleaning {
+                            Label("Moving...", systemImage: "hourglass")
+                        } else {
+                            Label("Move to Trash", systemImage: "trash")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
                 }
-                .buttonStyle(.bordered)
-                .disabled(cleanupManager.isScanning || cleanupManager.isCleaning || result.items.isEmpty)
             }
 
             Divider()
@@ -132,7 +154,7 @@ private struct CleanupPreviewDetails: View {
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(result.items.prefix(candidatePreviewLimit)) { item in
+                        ForEach(previewItems) { item in
                             CleanupCandidateRow(item: item)
                         }
 
@@ -184,8 +206,12 @@ private struct CleanupPreviewDetails: View {
         }
     }
 
+    private var previewItems: ArraySlice<CleanupItem> {
+        result.category.id == .trash ? result.items[...] : result.items.prefix(candidatePreviewLimit)
+    }
+
     private var remainingCandidateCount: Int {
-        max(result.items.count - candidatePreviewLimit, 0)
+        result.items.count - previewItems.count
     }
 
     private var largestItemText: String {
