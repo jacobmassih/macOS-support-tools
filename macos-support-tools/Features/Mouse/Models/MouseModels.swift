@@ -107,7 +107,7 @@ enum ScrollReversalPolicy {
     }
 
     private static func isDiscreteScrolling(_ deltas: ScrollWheelDeltas) -> Bool {
-        isNearWholeNumber(deltas.vertical) || isNearWholeNumber(deltas.horizontal)
+        isNearWholeNumber(deltas.vertical) && isNearWholeNumber(deltas.horizontal)
     }
 
     private static func hasWheelSizedDelta(_ deltas: ScrollWheelDeltas) -> Bool {
