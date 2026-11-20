@@ -41,6 +41,19 @@ enum SMCSensorRole: Equatable {
 
 /// Pure decoding for the SMC wire format, deliberately free of IOKit so every branch is unit testable.
 enum SMCDecoder {
+    private enum TemperatureEncoding: String {
+        case float = "flt "
+        case signedFixedPoint = "sp78"
+        case unsignedFixedPoint = "fpe2"
+
+        nonisolated var byteCount: Int {
+            switch self {
+            case .float: 4
+            case .signedFixedPoint, .unsignedFixedPoint: 2
+            }
+        }
+    }
+
     /// Intel Macs expose a handful of fixed die/proximity sensors under uppercase keys.
     nonisolated static let intelCPUKeys: Set<String> = ["TC0P", "TC0D", "TC0E", "TC0F", "TCXC", "TCAD"]
     nonisolated static let intelGPUKeys: Set<String> = ["TG0P", "TG0D", "TG0H", "TG1D", "TG1P"]
@@ -93,25 +106,40 @@ enum SMCDecoder {
         value > 5 && value < 130
     }
 
+    nonisolated static func canDecodeTemperature(_ info: SMCKeyInfo) -> Bool {
+        temperatureEncoding(dataSize: info.dataSize, dataType: info.dataType) != nil
+    }
+
+    private nonisolated static func temperatureEncoding(dataSize: UInt32, dataType: UInt32) -> TemperatureEncoding? {
+        guard let encoding = TemperatureEncoding(rawValue: name(dataType)),
+              dataSize >= encoding.byteCount else {
+            return nil
+        }
+        return encoding
+    }
+
     nonisolated static func temperature(bytes: [UInt8], dataSize: UInt32, dataType: UInt32) -> Double? {
-        switch name(dataType) {
-        case "flt " where dataSize >= 4 && bytes.count >= 4:
+        guard let encoding = temperatureEncoding(dataSize: dataSize, dataType: dataType),
+              bytes.count >= encoding.byteCount else {
+            return nil
+        }
+
+        switch encoding {
+        case .float:
             // `flt ` payloads are IEEE-754 singles in little-endian byte order.
             var bits = UInt32(bytes[3]) << 24
             bits |= UInt32(bytes[2]) << 16
             bits |= UInt32(bytes[1]) << 8
             bits |= UInt32(bytes[0])
             return Double(Float(bitPattern: bits))
-        case "sp78" where dataSize >= 2 && bytes.count >= 2:
+        case .signedFixedPoint:
             // Signed 8.8 fixed point, big-endian. Reinterpreting the assembled bit pattern
             // keeps the sign bit and avoids overflowing `Int16` for readings above 127C.
             let raw = UInt16(bytes[0]) << 8 | UInt16(bytes[1])
             return Double(Int16(bitPattern: raw)) / 256.0
-        case "fpe2" where dataSize >= 2 && bytes.count >= 2:
+        case .unsignedFixedPoint:
             // Unsigned 14.2 fixed point, big-endian.
             return Double(UInt16(bytes[0]) << 8 | UInt16(bytes[1])) / 4.0
-        default:
-            return nil
         }
     }
 
@@ -252,7 +280,7 @@ struct SMCTransport: Sendable {
     }
 }
 
-/// Walks the SMC key table, keeps the keys that report a usable temperature, and turns a
+/// Walks the SMC key table, keeps the keys with supported temperature data, and turns a
 /// sweep of those sensors into a `ThermalReading`.
 struct SMCSensorScanner {
     private let transport: SMCTransport
@@ -292,17 +320,11 @@ struct SMCSensorScanner {
             guard let key = key(at: index),
                   let role = SMCDecoder.sensorRole(forKey: SMCDecoder.name(key)),
                   let info = keyInfo(for: key),
-                  info.dataSize > 0 else {
+                  SMCDecoder.canDecodeTemperature(info) else {
                 continue
             }
 
-            let sensor = SMCSensor(key: key, role: role, info: info)
-
-            guard temperature(for: sensor) != nil else {
-                continue
-            }
-
-            discovered.append(sensor)
+            discovered.append(SMCSensor(key: key, role: role, info: info))
         }
 
         return discovered

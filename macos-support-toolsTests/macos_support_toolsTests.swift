@@ -1332,11 +1332,11 @@ struct macos_support_toolsTests {
 
     @Test func smcSensorScannerWalksKeyTableAndKeepsTemperatureSensors() {
         let smc = FakeSMC(entries: [
-            "Tp09": .float(54.53),
+            "Tp09": .float(54.0),
             "Tp0U": .float(58.0),
             "Tg0f": .float(46.0),
             "TB0T": .float(30.0),
-            "TP1t": .raw(type: "ui32", bytes: [0, 0, 0, 1]),
+            "Tp1t": .raw(type: "ui32", bytes: [0, 0, 0, 1]),
             "Tp1x": .float(-127.0)
         ])
         let scanner = SMCSensorScanner(transport: smc.transport())
@@ -1346,11 +1346,30 @@ struct macos_support_toolsTests {
         let discovered = scanner.discoverSensors()
         let names = discovered.map { SMCDecoder.name($0.key) }.sorted()
 
-        // TB0T is not a CPU/GPU key, TP1t is not a temperature type, and Tp1x reads
-        // an implausible value, so none of them survive discovery.
-        #expect(names == ["Tg0f", "Tp09", "Tp0U"])
-        #expect(discovered.filter { $0.role == .cpu }.count == 2)
+        #expect(names == ["Tg0f", "Tp09", "Tp0U", "Tp1x"])
+        #expect(discovered.filter { $0.role == .cpu }.count == 3)
         #expect(discovered.filter { $0.role == .gpu }.count == 1)
+        #expect(scanner.reading(sensors: discovered).cpuCelsius == 56)
+    }
+
+    @Test func smcSensorCacheKeepsSensorsWithAnInvalidFirstSample() {
+        let cache = SMCSensorCache()
+        let initial = SMCSensorScanner(transport: FakeSMC(entries: [
+            "Tp09": .float(-127.0),
+            "Tg0f": .float(46.0)
+        ]).transport())
+        let recovered = SMCSensorScanner(transport: FakeSMC(entries: [
+            "Tp09": .float(54.0),
+            "Tg0f": .float(46.0)
+        ]).transport())
+
+        let first = initial.reading(sensors: cache.sensors(discover: initial.discoverSensors))
+        #expect(first.cpuCelsius == nil)
+        #expect(first.gpuCelsius == 46)
+
+        let next = recovered.reading(sensors: cache.sensors(discover: recovered.discoverSensors))
+        #expect(next.cpuCelsius == 54)
+        #expect(next.gpuCelsius == 46)
     }
 
     @Test func smcSensorScannerAveragesDiscoveredClusters() {
