@@ -990,11 +990,31 @@ struct macos_support_toolsTests {
 
     @Test func reverseScrollIfNeededFlipsWheelEventInPlace() throws {
         let event = try #require(makeScrollEvent(axis1: 3, axis2: -2))
+        event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: 4)
+        event.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: 25)
 
         reverseScrollIfNeeded(event)
 
         #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis1) == -3)
         #expect(event.getDoubleValueField(.scrollWheelEventDeltaAxis2) == 2)
+        #expect(event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1) == -4)
+        #expect(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1) == -25)
+    }
+
+    @Test func reverseScrollIfNeededPreservesFractionalSingleAxisEvents() throws {
+        for (lineField, fixedPointField) in [
+            (CGEventField.scrollWheelEventDeltaAxis1, CGEventField.scrollWheelEventFixedPtDeltaAxis1),
+            (.scrollWheelEventDeltaAxis2, .scrollWheelEventFixedPtDeltaAxis2)
+        ] {
+            let event = try #require(makeScrollEvent(axis1: 0, axis2: 0))
+            event.setIntegerValueField(lineField, value: 1)
+            event.setDoubleValueField(fixedPointField, value: 1.5)
+
+            reverseScrollIfNeeded(event)
+
+            #expect(event.getIntegerValueField(lineField) == 1)
+            #expect(event.getDoubleValueField(fixedPointField) == 1.5)
+        }
     }
 
     @Test func reverseScrollIfNeededSkipsPointDeltasWhenEventCarriesNone() throws {

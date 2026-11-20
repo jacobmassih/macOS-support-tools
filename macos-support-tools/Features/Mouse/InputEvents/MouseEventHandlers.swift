@@ -60,8 +60,8 @@ extension CGEvent {
     var scrollEventDescriptor: ScrollEventDescriptor {
         ScrollEventDescriptor(
             deltas: ScrollWheelDeltas(
-                vertical: getDoubleValueField(.scrollWheelEventDeltaAxis1),
-                horizontal: getDoubleValueField(.scrollWheelEventDeltaAxis2)
+                vertical: getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1),
+                horizontal: getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2)
             ),
             pointDeltas: ScrollWheelDeltas(
                 vertical: getDoubleValueField(.scrollWheelEventPointDeltaAxis1),
@@ -73,8 +73,13 @@ extension CGEvent {
     }
 
     func applyScrollReversal(_ reversal: ScrollReversal) {
-        setDoubleValueField(.scrollWheelEventDeltaAxis1, value: reversal.deltas.vertical)
-        setDoubleValueField(.scrollWheelEventDeltaAxis2, value: reversal.deltas.horizontal)
+        let verticalLines = getIntegerValueField(.scrollWheelEventDeltaAxis1)
+        let horizontalLines = getIntegerValueField(.scrollWheelEventDeltaAxis2)
+        // Writing the line deltas also changes the fixed-point and point deltas.
+        setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -verticalLines)
+        setIntegerValueField(.scrollWheelEventDeltaAxis2, value: -horizontalLines)
+        setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: reversal.deltas.vertical)
+        setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: reversal.deltas.horizontal)
 
         guard let pointDeltas = reversal.pointDeltas else {
             return
